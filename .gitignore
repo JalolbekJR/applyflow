@@ -1,0 +1,66 @@
+﻿# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node / Nuxt
+node_modules/
+.nuxt/
+.output/
+dist/
+.nitro/
+.cache/
+coverage/
+*.tsbuildinfo
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+db.sqlite3
+staticfiles/
+media/
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+screenshots/
+recordings/
+
+# Docker overrides and local volumes
+compose.override.yaml
+docker-compose.override.yml
+postgres-data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
