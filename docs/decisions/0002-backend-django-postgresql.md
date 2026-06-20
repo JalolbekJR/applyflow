@@ -1,0 +1,32 @@
+# ADR 0002 - Use Django REST Framework And PostgreSQL For The Backend
+
+Status: Accepted
+
+## Context
+
+ApplyFlow needs vacancy management, draft applications, secure document upload, status lookup, server-side validation, and Django Admin. The project also needs to demonstrate Python, Django, Django REST Framework, PostgreSQL, automated testing, and secure backend design.
+
+## Decision
+
+Use Django, Django REST Framework, and PostgreSQL.
+
+Django Admin will support internal vacancy and application management. Django REST Framework will expose versioned REST endpoints for the Nuxt frontend. PostgreSQL will enforce constraints, indexes, uniqueness, and transactional submission behavior.
+
+## Consequences
+
+- The backend can enforce authorization, validation, and duplicate-submission rules server-side.
+- PostgreSQL constraints reduce reliance on application-only validation.
+- DRF serializers can centralize API validation and error mapping.
+- The implementation must avoid turning a small app into ceremonial architecture.
+
+## Alternatives Considered
+
+- FastAPI: good API framework, but Django Admin and the requested Django skill set make Django a better fit.
+- SQLite: acceptable for early local experiments, but the planned backend should use PostgreSQL to match constraints and deployment expectations.
+- Microservices: rejected because one developer and one domain do not justify the overhead.
+
+## Follow-Up Work
+
+- Choose exact Django and Python versions in Phase 5.
+- Add OpenAPI generation during backend implementation.
+- Add pytest and pytest-django coverage with PostgreSQL.
