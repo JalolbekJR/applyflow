@@ -34,9 +34,9 @@ Any exact period is a proposed operational policy and requires legal and organiz
 
 Submitted applications require a retention period. This remains undecided because real retention depends on legal and hiring policy requirements.
 
-Phase 0 recommendation:
+Current recommendation:
 
-- Define a short portfolio-demo retention period for demo data.
+- Define a short retention period for fictional test data.
 - Do not use real candidate data.
 - Add deletion and export procedures before real use.
 

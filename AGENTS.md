@@ -1,107 +1,86 @@
-# ApplyFlow Agent Contract
+# ApplyFlow Development Contract
 
-This repository is currently in Phase 0: product definition, UX direction, architecture, security planning, testing strategy, documentation standards, and implementation roadmap.
-
-No production application has been implemented yet.
+ApplyFlow is currently in Phase 1: code-first UX validation and the candidate-facing Nuxt frontend
+foundation. Phase 0 product and architecture decisions are accepted. The current frontend uses
+fixtures and simulated services and must not be described as a real recruitment system.
 
 ## Before Editing
 
-Every future agent must:
-
-1. Inspect the repository before editing.
-2. Check the active branch and working tree.
-3. Read the relevant documentation and ADRs.
-4. Respect the active phase.
-5. Write a short plan before changing files.
-6. Define acceptance criteria for the task.
-7. Preserve existing architecture decisions unless the task explicitly changes them.
-8. Keep changes small and reviewable.
+1. Inspect the repository, active branch, and working tree.
+2. Read the documentation and ADRs relevant to the task.
+3. Confirm that the work fits the active phase.
+4. Write a short plan and acceptance criteria.
+5. Preserve accepted architecture unless the task explicitly changes it.
+6. Keep changes small and reviewable.
 
 ## Phase Boundary
 
-Stop at the current phase boundary.
+Phase 1 allows Nuxt 4 frontend source, configuration, tests, fictional fixtures, ignored
+browser-review screenshots, and documentation updates required by frontend behavior.
 
-Do not start Nuxt, Django, Docker, CI, database, deployment, or Figma implementation work unless the user explicitly moves the project into that phase.
-
-For Phase 0:
-
-- Documentation and ADRs are allowed.
-- Root governance files are allowed.
-- Application source code is not allowed.
-- Generated boilerplate is not allowed.
-- Package lockfiles are not allowed.
-- Fake screenshots or fake test results are not allowed.
+Do not add Django, DRF, PostgreSQL, migrations, Django Admin, Docker, CI, deployment, or production
+infrastructure during this phase. Figma work remains deferred while the connected plan prevents
+useful canvas operations.
 
 ## Development Rules
 
-Future implementation work must:
+- Preserve working behavior and avoid unrelated refactors.
+- Explain every dependency addition before making it.
+- Add or update tests when behavior changes.
+- Keep route pages focused and components responsibility-specific.
+- Keep fixture-backed save, upload, submission, and status behavior clearly labeled as simulated.
+- Implement loading, empty, error, unavailable, and success states where the workflow needs them.
+- Preserve semantic HTML, keyboard behavior, visible focus, reduced motion, and mobile reflow.
+- Treat client validation as user feedback, never as a security boundary.
+- Treat uploaded files as hostile input in the planned backend.
+- Keep secrets and real personal data out of source, fixtures, tests, screenshots, and logs.
+- Never weaken validation, security rules, or tests to make a check pass.
 
-- Avoid unrelated refactors.
-- Explain every dependency addition.
-- Add or update tests with behavior changes.
-- Update documentation when behavior changes.
-- Preserve architecture decisions or create a superseding ADR.
-- Keep views/controllers thin.
-- Enforce permissions server-side.
-- Treat uploaded files as hostile input.
-- Preserve accessibility in every feature.
-- Implement loading, empty, error, and success states.
-- Run checks before reporting completion.
-- Report exact commands and failures honestly.
-- Never weaken validation, security, or tests simply to make CI pass.
-- Never commit or push unless explicitly instructed.
+## Code And Documentation Authorship
 
-## Project Anti-Patterns
+- Write code, comments, documentation, and interface copy in the maintainer's direct voice.
+- Describe product behavior and engineering decisions, not the process used to produce the text.
+- Do not use portfolio-pitch, authorship-provenance, prompt-history, or generated-tutorial language in
+  normal product documentation.
+- Keep comments concise and use them only for non-obvious business rules, accessibility intent,
+  security boundaries, compatibility constraints, or meaningful trade-offs.
+- Make capability claims truthful. Distinguish implemented behavior, simulated behavior, planned
+  work, assumptions, and observed evidence.
+- Do not invent research, metrics, interviews, analytics, screenshots, test results, or security
+  guarantees.
 
-Avoid:
+## Interaction Quality
 
-- One giant multi-step form component.
-- Hidden labels.
-- Generic cards everywhere.
-- Authentication tokens in localStorage.
-- Frontend-only authorization.
-- Extension-only file validation.
-- Predictable status identifiers.
-- Real personal data in fixtures, tests, screenshots, or demo data.
-- Invented usability findings.
-- Generic AI-generated copy.
-- Premature state libraries.
-- Unnecessary microservices.
-- Custom recruiter dashboards before Django Admin has been used.
-- WebGL or excessive visual effects for the application flow.
+Every major UI phase must recheck representative interactions in a browser or Playwright. Keep one
+consistent, restrained, product-specific state language across responsive layouts, hover-capable
+pointer hover, pressed or active feedback, focus-visible, disabled, loading or pending, touch, and
+reduced-motion behavior. Interaction feedback must not shift layout, and touch users must never
+depend on hover to understand or operate a control.
 
-## Documentation Rules
+## Architecture And Security Rules
 
-Documentation must:
-
-- Separate observed issues from assumptions.
-- State when no user research has been conducted.
-- Avoid fabricated metrics, interviews, analytics, and findings.
-- Use direct language and concrete decisions.
-- Link to relevant ADRs when decisions matter.
-- Mark unresolved choices clearly.
-
-## Security Rules
-
-Security-sensitive changes require extra care:
-
-- Draft access must use high-entropy server-generated secrets.
-- Candidate authorization must not rely on numeric IDs.
-- CV uploads must be validated server-side.
-- Browser-supplied MIME types are not trusted.
-- Uploaded documents must not be public by default.
-- Logs must avoid personal data and uploaded file contents.
+- Use separate routes for the four application steps.
+- Use composables for shared application state and typed services for external boundaries.
+- Do not add a state library without a demonstrated need and a superseding ADR.
+- Do not store candidate data or authorization credentials in localStorage.
+- Candidate authorization must never rely on numeric identifiers.
+- Future draft access must use high-entropy server-generated secrets.
+- Future CV validation must be server-side and must not trust browser MIME types or extensions alone.
+- Uploaded documents must remain private by default.
 - Django Admin access must remain separate from candidate access.
-- Production secrets must stay out of the repository.
 
-## Reporting Completion
+## Command And Change Reporting
 
-When finishing a task, report:
+- Run the relevant formatting, lint, type, test, build, and browser checks before completion.
+- Report exact commands and their real results, including warnings and non-zero exits.
+- Report retries, replacement commands, timeouts, blocked tools, parser errors, and changed
+  approaches; do not hide failed attempts behind a later success.
+- Do not claim completion while a required check is skipped or failing.
+- Do not stage, commit, push, merge, deploy, migrate data, install packages, or modify external
+  services unless the user explicitly approves that action.
 
-- What changed.
-- Files changed.
-- Commands run.
-- Results.
-- Risks.
-- Manual confirmation still needed.
-- Whether any commit, push, branch change, deployment, migration, package install, or external action occurred.
+## Completion Report
+
+Report what changed, files changed, commands run, results, remaining risks, manual confirmation still
+needed, and whether any branch change, staging, commit, push, merge, deployment, migration, package
+install, or external action occurred.

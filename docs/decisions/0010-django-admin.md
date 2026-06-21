@@ -21,7 +21,7 @@ Admin access is staff-only and least privilege. Public candidate APIs remain sep
 
 ## Alternatives Considered
 
-- Custom recruiter dashboard: deferred because it adds UI scope without improving the portfolio's core candidate story.
+- Custom recruiter dashboard: deferred because it adds staff-interface scope before the core workflow is validated.
 - No internal management: rejected because vacancy content and application review need an operational interface.
 
 ## Follow-Up Work

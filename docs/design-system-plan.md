@@ -1,14 +1,17 @@
 # Design System Plan
 
-Phase 0 defines the planned system. Tokens and components will be designed manually in Figma during Phase 1 and Phase 2, then implemented later.
+The coded Nuxt design system is the current source of truth. CSS tokens, components, responsive
+rules, and interaction states are reviewed in the browser and through Playwright. A Figma library
+may be reconstructed later when useful collaboration or editing access justifies it; it must reflect
+the implemented system rather than precede it.
 
 ## Token Families
 
-| Family | Planned Tokens |
+| Family | Roles |
 | --- | --- |
 | Color | Surface, ink, line, signal, danger, warning, success, focus. |
 | Typography | Family, size, line-height, weight, measure, responsive usage. |
-| Spacing | Scale, page gutters, section spacing, and form grouping to be defined during design work. |
+| Spacing | Scale, page gutters, section spacing, and form grouping. |
 | Radius | Input, button, small panel, modal. Keep modest. |
 | Borders | Subtle lines, focus lines, active step line. |
 | Shadows | Sticky footer, modal, dropdown, upload drag state. |
@@ -72,11 +75,14 @@ Form components must support persistent visible labels, hints, required/optional
 
 ## Motion Tokens
 
-Phase 1 and Phase 2 should define a small duration and easing set for feedback and orientation. Phase 0 does not select final timing values. Reduced-motion mode should remove non-essential movement and preserve status changes through text and layout.
+The current interface uses one short transition duration for feedback and orientation. Reduced-motion
+mode removes non-essential movement while preserving status changes through text and layout.
 
 ## Phase Boundary
 
-Final typography, color values, spacing measurements, radii, shadows, breakpoints, and layout measurements are intentionally unresolved until Phase 1 and Phase 2 design work can evaluate them together.
+Implemented token values live in `frontend/app/assets/css/main.css`. Changes require responsive,
+keyboard, pointer, touch, reduced-motion, and contrast review. Figma remains optional under
+[ADR 0012](decisions/0012-code-first-design-workflow.md).
 
 ## Implementation Notes
 

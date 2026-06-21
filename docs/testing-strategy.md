@@ -1,106 +1,57 @@
 # Testing Strategy
 
-Phase 0 defines the test plan only. No tests exist yet.
+Testing is split between the implemented Phase 1 frontend and the planned backend.
 
-## Backend Unit And Integration Tests
+## Current Frontend Checks
 
-Planned coverage:
+Run from `frontend/`:
 
-- Active vacancy rules.
-- Closed vacancy rules.
-- Draft creation.
-- Draft token authorization.
-- One-active-draft-per-browser conflict handling.
-- Same-vacancy draft creation restores the current draft instead of creating another.
-- Continue-existing-draft never creates a new draft.
-- Abandon deletes the draft document and clears authorization before a new draft is created.
-- Draft cookie loss and expiration behavior.
-- Draft expiration.
-- Application validation.
-- Atomic submission.
-- Duplicate submission under concurrent requests and the database constraint.
-- Upload size limits.
-- Non-PDF file rejected.
-- Browser MIME, extension, PDF signature, and inspected-content mismatch handling.
-- Second active CV for the same draft is rejected until the first is removed.
-- Invalid PDF signature and malformed PDF rejection.
-- Document access authorization.
-- Throttling.
-- Status lookup enumeration resistance.
-- Status lookup secret hashing and non-logging.
-- Application reference not accepted as authorization.
-- Retention cleanup.
-- Privacy-safe logging.
-- Admin permissions.
-- Least-privilege admin document access.
-- Allowed and rejected transitions for `submitted`, `under_review`, and `closed`.
+```powershell
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:e2e
+```
 
-## Frontend Unit And Component Tests
+### Unit And Component Coverage
 
-Planned coverage:
+- Candidate and experience validation.
+- Vacancy service cloning and active-vacancy lookup.
+- Step progress semantics.
+- Error-summary focus, scrolling, links, and grouped destinations.
+- PDF metadata acceptance, unsupported file rejection, and oversize metadata rejection.
+- Credential copy success and manual-copy recovery.
+- Deterministic simulated save failure and retry.
 
-- Field validation.
-- Step navigation.
-- Progress state.
-- Draft serialization.
-- Draft restoration.
-- Upload state.
-- Upload cancellation.
-- API validation mapping.
-- Review summary.
-- Duplicate-submission lock.
-- Recoverable errors.
-- Reduced-motion behavior.
-- Keyboard interaction.
+### Playwright Coverage
 
-## Playwright Flows
+- Vacancy discovery through confirmation and valid status lookup.
+- Invalid application routes and draft-mutation regression.
+- Route heading focus and review-edit navigation.
+- Text, radio group, upload group, and consent error destinations.
+- Generic status failure and form relationship.
+- Save failure, preserved values, announcement, focus, and retry.
+- Rejected upload without loss of unrelated values.
+- Submission-in-progress duplicate activation guard.
+- Keyboard application start.
+- Mobile semantic and visual vacancy order, footer targets, and 320px reflow.
+- Responsive and affected-state screenshots for human review.
 
-Planned flows:
+## Planned Backend Tests
 
-- Vacancy discovery.
-- Vacancy detail.
-- Starting an application.
-- Completing all steps.
-- Uploading a valid CV.
-- Recovering from invalid upload.
-- Reviewing data.
-- Submitting.
-- Viewing confirmation.
-- Keyboard-only completion.
-- Mobile completion.
-- Preserving entered data after recoverable API failure.
-- Private status lookup.
-- Status lookup response excludes internal notes, rankings, staff identities, and rejection reasoning.
-- Accessibility scanning.
-
-## Accessibility Checks
-
-Automated checks are helpful but not enough. Manual checks should include:
-
-- Keyboard-only completion.
-- Visible focus review.
-- Screen-reader label review.
-- Error summary and field association.
-- Reduced-motion review.
-- Mobile touch and keyboard behavior.
-
-## Security Review
-
-Security review should focus on:
-
-- Draft authorization.
-- Document access.
-- Upload validation.
-- Status lookup enumeration.
-- CSRF.
-- XSS through vacancy content.
-- Admin permissions.
-- Logging restrictions.
-- Environment handling.
+- Active and closed vacancy rules.
+- Draft creation, authorization, restoration, expiration, abandonment, and cleanup.
+- Server-side field validation and privacy-safe error mapping.
+- Atomic submission and duplicate protection under concurrency.
+- PDF extension, size, signature, content, malformed input, storage name, and authorization checks.
+- Status secret hashing, non-logging, throttling, and enumeration resistance.
+- Retention cleanup, staff permissions, and allowed application transitions.
 
 ## Test Data Rules
 
-Use obviously fictional values:
+Use obviously fictional values such as:
 
 - `Avery Example`
 - `avery.candidate@example.test`
@@ -108,18 +59,12 @@ Use obviously fictional values:
 - `slk_9Wn6zQp4v2T8mR7cX5bL3kY1`
 - `avery-example-cv.pdf`
 
-Do not use real CVs, real names, real emails, or real phone numbers.
+Do not use real CVs, names, emails, phone numbers, addresses, employers, credentials, or application
+records.
 
-## Quality Gates By Phase
+## Evidence Rules
 
-| Phase | Required Checks |
-| --- | --- |
-| Phase 3 | Frontend lint/typecheck/build once scaffold exists, basic component tests. |
-| Phase 4 | Form validation tests and Playwright happy path. |
-| Phase 5 | Backend pytest, Ruff, migration consistency, Django system checks. |
-| Phase 6 | Upload and draft security tests. |
-| Phase 7 | End-to-end submission and status lookup tests. |
-| Phase 8 | Accessibility, security, and performance hardening checks. |
-| Phase 9 | Docker image build and CI workflow checks. |
-
-No command should be reported as passing until it has actually run.
+- A command is passing only after it has run successfully.
+- Retries and warnings remain part of the execution report.
+- Screenshots prove rendered state only; they do not prove usability or accessibility conformance.
+- Client-side checks do not prove backend security.

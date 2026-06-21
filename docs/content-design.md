@@ -128,4 +128,4 @@ Nice to have:
 
 - Usability testing facilitation.
 - Developer collaboration.
-- Portfolio case-study writing.
+- Public product-decision notes.

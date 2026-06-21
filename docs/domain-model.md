@@ -1,6 +1,6 @@
 # Domain Model
 
-This is a Phase 0 model proposal. No database schema or migration exists yet.
+This is a backend model proposal. No database schema or migration exists yet.
 
 ## Diagram
 

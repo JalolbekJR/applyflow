@@ -8,7 +8,8 @@
 - [Django REST Framework throttling](https://www.django-rest-framework.org/api-guide/throttling/)
 - [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
-These references were checked on 2026-06-14. Recheck exact package versions before Phase 5.
+These references were checked on 2026-06-14. Recheck exact package versions before Phase 3 backend
+implementation.
 
 ## Planned Stack
 
@@ -90,7 +91,7 @@ Validation happens in both client and server, but the server decides:
 
 ## Observability
 
-Phase 0 only plans observability.
+Observability remains planned; no backend telemetry is implemented.
 
 Later implementation should keep operational logs privacy-safe and audit only the events that need durable accountability:
 

@@ -1,64 +1,38 @@
 # Figma Structure
 
-No Figma file has been created by Codex. This document defines the planned manual structure for Jalolbek JR.
+Figma work is deferred. The connected plan currently prevents useful canvas operations, so the
+running Nuxt frontend and browser screenshots are the active design-review surface under
+[ADR 0012](decisions/0012-code-first-design-workflow.md).
 
-## Planned Pages
+If a shared design file becomes useful later, use this structure:
 
 1. `00 - Cover and index`
-2. `01 - Problem and assumptions`
-3. `02 - Existing-flow audit`
-4. `03 - Candidate journey`
-5. `04 - User flow`
-6. `05 - Low-fidelity wireframes`
-7. `06 - Content and validation`
-8. `07 - Design tokens`
-9. `08 - Components and variants`
-10. `09 - Desktop screens`
-11. `10 - Mobile screens`
-12. `11 - Interactive prototype`
-13. `12 - Accessibility annotations`
-14. `13 - Usability test plan`
-15. `14 - Findings and iterations`
-16. `15 - Developer handoff`
+2. `01 - Product assumptions`
+3. `02 - Candidate journey and user flow`
+4. `03 - Content and validation`
+5. `04 - Design tokens`
+6. `05 - Components and variants`
+7. `06 - Desktop screens`
+8. `07 - Mobile screens`
+9. `08 - Accessibility annotations`
+10. `09 - Research plan and findings`
+11. `10 - Developer handoff`
 
-## What Codex Prepared In Phase 0
+## Source Of Truth
 
-- Product scope.
-- UX principles.
-- Field inventory.
-- Information architecture.
-- User flow.
-- Design direction.
-- Design-system token plan.
-- Accessibility acceptance criteria.
-- Figma page plan.
+- Implemented behavior is defined by the Nuxt frontend and its tests.
+- Product and architecture boundaries are defined by the accepted documentation and ADRs.
+- Browser screenshots are review evidence, not usability findings.
+- A future design file must reflect the approved coded system instead of inventing a parallel one.
 
-## What Jalolbek JR Should Do Manually In Figma
+## Future Design-File Checklist
 
-- Create low-fidelity vacancy and application screens.
-- Test mobile-first layout choices.
-- Define actual color, typography, spacing, and component tokens.
-- Build component variants and states.
-- Add accessibility annotations.
-- Create a clickable prototype.
-- Record real findings after usability review.
-
-## What Belongs Later In Frontend Implementation
-
-- Nuxt routes and layouts.
-- CSS tokens.
-- Component code.
-- API integration.
-- Draft and upload behavior.
-- Frontend tests.
-- Playwright flows.
-
-## Handoff Checklist
-
-- Every screen has a clear purpose.
-- Mobile and desktop variants exist.
-- Form fields map to [field inventory](field-inventory.md).
-- Error states are designed, not left implicit.
-- Upload progress, cancellation, retry, and failure states are visible.
-- Focus order and keyboard behavior are annotated.
-- Component states cover default, hover, focus-visible, active, disabled, loading, error, success, and read-only where relevant.
+- Record actual color, typography, spacing, radius, and motion tokens.
+- Build variants for default, hover, focus-visible, active, disabled, loading, error, success, and
+  read-only states where relevant.
+- Include 320px mobile and representative desktop screens.
+- Annotate heading structure, focus targets, keyboard order, hints, errors, live regions, and touch
+  targets.
+- Keep upload, save failure, unavailable vacancy, confirmation, and status failure states visible.
+- Use only fictional data.
+- Record research findings only after real research has occurred.
