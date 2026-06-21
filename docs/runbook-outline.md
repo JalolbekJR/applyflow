@@ -1,10 +1,13 @@
 # Runbook Outline
 
-This is an outline for Phase 9. It is not an operational runbook yet because the application is not implemented or deployed.
+The Phase 1 Nuxt candidate frontend exists with fixture-backed saving, submission, and status
+behavior. This document remains an outline because Django, persistence, private document storage,
+authorization, deployment, and production operations are not implemented. Exact operational
+procedures belong to the Phase 7 packaging and deployment work.
 
 ## Purpose
 
-The runbook should help Jalolbek JR operate the demo safely, recover from common issues, and explain operational thinking in interviews.
+The runbook should help maintainers operate the application safely and recover from common issues.
 
 ## Planned Sections
 
@@ -65,4 +68,5 @@ The runbook must remind maintainers:
 
 ## Not Ready Yet
 
-The runbook cannot include exact commands until the app, Docker setup, CI, and deployment target exist.
+The runbook cannot include backend, migration, deployment, backup, or rollback commands until those
+systems and their target environment exist.

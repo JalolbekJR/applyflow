@@ -1,6 +1,7 @@
 # API Contract
 
-The API contract is a Phase 0 proposal. It should be refined during backend implementation and represented with OpenAPI later.
+This contract is a backend proposal. No API is implemented. Refine it during Phase 3 and represent
+the implemented contract with OpenAPI later.
 
 ## Principles
 

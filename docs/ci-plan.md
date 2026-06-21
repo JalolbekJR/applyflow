@@ -1,6 +1,7 @@
 # CI Plan
 
-Phase 0 plans CI only. No GitHub Actions workflow files are created yet.
+The Phase 1 frontend has local formatting, lint, type, unit, build, and Playwright commands. CI and
+GitHub Actions workflows are not implemented and remain Phase 7 work.
 
 Reference: [GitHub Actions documentation](https://docs.github.com/actions).
 
@@ -10,16 +11,16 @@ Reference: [GitHub Actions documentation](https://docs.github.com/actions).
 - Run frontend and backend checks independently.
 - Avoid deployment until tests and builds pass.
 - Avoid workflows that require unavailable secrets.
-- Add security-oriented repository checks when implementation begins.
+- Add security-oriented repository checks when CI implementation begins.
 
-## Planned Frontend Checks
+## Frontend Checks To Run In CI
 
 - Install dependencies.
 - Lint.
 - TypeScript checking.
 - Unit tests.
 - Nuxt production build.
-- Playwright critical paths when an app exists.
+- Playwright critical paths.
 
 ## Planned Backend Checks
 
@@ -49,7 +50,7 @@ Later workflows may be:
 - `e2e.yml`
 - `docker-build.yml`
 
-Do not create these until the relevant app code exists.
+Create only the workflows supported by the relevant frontend or backend code.
 
 ## Branch Protection
 
@@ -62,4 +63,5 @@ Recommended later:
 
 ## Deployment
 
-No deployment automation is planned for Phase 0. When deployment starts, use staging before production and document rollback.
+Deployment automation is deferred to Phase 7. When deployment starts, use staging before
+production and document rollback.

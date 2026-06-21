@@ -13,7 +13,7 @@
 | `/apply/[slug]/review` | Step 4: review | Summary, edit links, submit. |
 | `/application/submitted` | Confirmation | Shows the application reference and delivers the separate status lookup secret through the planned secure confirmation flow. |
 | `/application/status` | Private status lookup | Requires the application reference and high-entropy status lookup secret. |
-| `/case-study` | Portfolio case study | Explains UX and technical process honestly. |
+| `/case-study` | Product notes | Explains current behavior, assumptions, and planned architecture. |
 | `/privacy` | Candidate privacy explanation | Product wording, not legal advice. |
 | `/accessibility` | Accessibility statement | Planned support and known limitations. |
 

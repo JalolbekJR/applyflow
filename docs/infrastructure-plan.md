@@ -1,12 +1,16 @@
 # Infrastructure Plan
 
-Phase 0 documents infrastructure only. No Docker files or deployment configuration are created in this phase.
+The Phase 1 Nuxt frontend runs locally. Production infrastructure, Docker configuration, Django,
+DRF, PostgreSQL, private document storage, and deployment configuration are not implemented.
 
 ## Local Development Services
 
-Planned later services:
+Current service:
 
 - Frontend: Nuxt development server.
+
+Planned services:
+
 - Backend: Django development server.
 - Database: PostgreSQL.
 - Private document storage: local private directory served only through authorized Django views.
@@ -47,7 +51,7 @@ Planned concerns:
 
 ## Docker Planning
 
-Docker files are deferred until Phase 9.
+Docker and deployment configuration are deferred until Phase 7.
 
 Planned requirements:
 
@@ -87,7 +91,7 @@ Before real recruitment use, define:
 - Retention policy.
 - Deletion handling.
 
-For portfolio demo data, keep backups small and do not include real personal data.
+For fictional test data, keep backups small and do not include real personal data.
 
 ## Runbook Link
 

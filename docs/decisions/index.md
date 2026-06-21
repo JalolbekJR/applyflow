@@ -15,3 +15,4 @@ ADRs record decisions that shape ApplyFlow. A later ADR may supersede an earlier
 - [ADR 0009 - Prefer same-origin deployment for the first public version](0009-same-origin-deployment.md)
 - [ADR 0010 - Use Django Admin instead of a custom recruiter dashboard](0010-django-admin.md)
 - [ADR 0011 - Use the MIT License](0011-open-source-license.md)
+- [ADR 0012 - Use a code-first design validation workflow](0012-code-first-design-workflow.md)

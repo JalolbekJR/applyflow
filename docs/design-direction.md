@@ -26,20 +26,17 @@ Signal concept: a thin active line that moves with the candidate through the pro
 
 ## Color Strategy
 
-The direction is warm neutral surfaces, near-black text, precise dividers, and one controlled signal color. Phase 0 defines semantic roles only: surface, raised surface, primary and secondary ink, divider, signal, focus, danger, warning, and success. Exact colors and contrast pairs must be selected and tested during Phase 1 and Phase 2.
+The implemented frontend uses a warm neutral canvas and surface system, near-black primary text,
+muted secondary text, precise dividers, and one controlled green signal family. Separate focus,
+danger, warning, success, and pending colors communicate interaction and status. Current values are
+defined as custom properties in `frontend/app/assets/css/main.css`; contrast still requires manual
+review across supported environments.
 
 ## Typography
 
-Use a practical type system with strong hierarchy and good multilingual fallback.
-
-Planned direction:
-
-- System UI or a licensed open-source sans-serif for interface text.
-- Optional editorial serif only if licensing, performance, and readability are acceptable.
-- No font should be chosen only because it is fashionable.
-- Font loading must avoid layout shift.
-
-No final typeface, scale, weight set, or measure is selected in Phase 0.
+Interface text uses a system sans-serif stack. Headings use an installed editorial serif stack with
+Georgia as the broad fallback, avoiding a font download and its associated layout shift. Fluid
+heading sizes and bounded reading, form, and content widths provide the current hierarchy.
 
 ## Layout
 
@@ -50,7 +47,8 @@ No final typeface, scale, weight set, or measure is selected in Phase 0.
 - Step progress visible without covering fields.
 - Long text should scan well on desktop and remain readable on phones.
 
-Exact grid columns, breakpoints, gutters, and reading widths belong to Phase 1 and Phase 2.
+Current grid columns, breakpoints, gutters, and reading widths are implemented as CSS tokens and
+responsive rules. Browser and Playwright review remain required when those values change.
 
 ## Surfaces And Radius
 
@@ -58,11 +56,12 @@ Use radius sparingly. Inputs and small controls may use modest radius. Avoid mak
 
 ## Shadows And Depth
 
-Depth should clarify layering, such as a sticky step footer or upload status. Avoid heavy shadows and glass effects.
+Borders provide the primary separation. The current frontend avoids decorative shadows and uses
+sticky positioning only where it supports vacancy context on larger screens.
 
 ## Photography And Illustration
 
-Do not use stock office photos, generic illustrations, or invented team imagery in the first version. The portfolio focus is the flow, content, and system design.
+Do not use stock office photos, generic illustrations, or invented team imagery in the first version. Keep attention on the vacancy content and application flow.
 
 ## Icons
 

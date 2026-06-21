@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-ApplyFlow needs vacancy management, draft applications, secure document upload, status lookup, server-side validation, and Django Admin. The project also needs to demonstrate Python, Django, Django REST Framework, PostgreSQL, automated testing, and secure backend design.
+ApplyFlow needs vacancy management, draft applications, secure document upload, status lookup, server-side validation, and a maintainable staff workflow.
 
 ## Decision
 
@@ -27,6 +27,6 @@ Django Admin will support internal vacancy and application management. Django RE
 
 ## Follow-Up Work
 
-- Choose exact Django and Python versions in Phase 5.
+- Choose exact Django and Python versions in Phase 3.
 - Add OpenAPI generation during backend implementation.
 - Add pytest and pytest-django coverage with PostgreSQL.
