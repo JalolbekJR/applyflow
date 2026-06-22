@@ -18,7 +18,7 @@ validated with appropriate evidence.
 
 ## Phase 1 - Candidate Frontend Foundation
 
-Status: current.
+Status: complete.
 
 Objective: maintain a usable Nuxt 4 candidate experience as the browser-based design and interaction
 review surface described in [ADR 0012](decisions/0012-code-first-design-workflow.md).
@@ -52,9 +52,9 @@ Acceptance criteria:
 - Formatting, lint, type checking, unit tests, production build, and Playwright checks pass.
 - No real candidate data, backend code, production infrastructure, or deployment is added.
 
-## Phase 2 - Design Documentation And Review
+## Design Documentation And Review Track
 
-Status: deferred.
+Status: ongoing when useful.
 
 The implemented frontend is the current design-review surface. Figma reconstruction is optional and
 should resume only when useful editing access is available or a collaboration need justifies it.
@@ -66,23 +66,29 @@ Future work:
 - Conduct usability research before reporting candidate findings.
 - Refine content and layouts only from observed evidence or a documented product decision.
 
-## Phase 3 - Django, DRF, PostgreSQL, And Django Admin
+## Phase 2 - Django, DRF, PostgreSQL, And Django Admin
 
-Status: not started.
+Status: current.
 
 Objective: make the backend the source of truth for vacancies and staff-managed application records.
 
-Planned work:
+Implemented foundation:
 
 - Django project and focused vacancy, application, and document modules.
-- PostgreSQL models, constraints, migrations, and test configuration.
-- DRF serializers, views, permissions, throttling, and OpenAPI contract.
-- Django Admin for vacancy and application operations; no custom staff dashboard.
-- Server-side validation and privacy-safe logging.
+- PostgreSQL-ready models, constraints, initial migrations, and SQLite test configuration.
+- DRF configuration, consistent errors, health endpoint, and read-only vacancy endpoints.
+- Django Admin registration for vacancy, application, draft, and document metadata.
+- Pytest and Ruff tooling.
+
+Still deferred:
+
+- Frontend API integration and authoritative server-backed candidate workflows.
+- Candidate draft authorization, throttling, OpenAPI generation, and privacy-safe operational logs.
+- PostgreSQL runtime validation.
 
 Production database or migration actions require separate approval.
 
-## Phase 4 - Secure Drafts And Private CV Upload
+## Phase 3 - Secure Drafts And Private CV Upload
 
 Status: not started.
 
@@ -98,7 +104,7 @@ Planned work:
 - Server-generated storage names, private storage, authorized download, and safe deletion.
 - Recoverable upload errors that preserve other candidate data.
 
-## Phase 5 - Integrated Submission And Status Lookup
+## Phase 4 - Integrated Submission And Status Lookup
 
 Status: not started.
 
@@ -113,7 +119,7 @@ Planned work:
 - Generic lookup failures, rate limiting, secret hashing, and minimal response content.
 - Integration and concurrency tests.
 
-## Phase 6 - Security, Accessibility, And Operational Hardening
+## Phase 5 - Security, Accessibility, And Operational Hardening
 
 Status: not started.
 
@@ -126,7 +132,7 @@ Planned work:
 - Retention policy, cleanup verification, diagnostics, and incident guidance.
 - Production-readiness review only after implemented controls have evidence.
 
-## Phase 7 - CI, Packaging, And Deployment
+## Phase 6 - CI, Packaging, And Deployment
 
 Status: not started.
 

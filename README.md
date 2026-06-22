@@ -3,10 +3,12 @@
 ApplyFlow is a candidate-facing vacancy and job application experience built around a short,
 transparent application process.
 
-The repository is currently in Phase 1. A Nuxt 4 frontend implements vacancy discovery, a
-four-step application flow, confirmation, and private status lookup using fictional fixtures and
-simulated services. There is no backend, database, persistent draft, document storage, or real
-submission yet.
+The repository is currently in Phase 2. A Nuxt 4 frontend implements vacancy discovery and a
+four-step application flow using fictional fixtures and simulated services. A Django 5.2 backend
+foundation now provides domain models, initial migrations, Django Admin registration, a health
+endpoint, and read-only vacancy APIs. The frontend is not connected to the backend, and candidate
+authentication, authorized drafts, uploads, real submission, deployment, and production operations
+remain unimplemented.
 
 ## Current Frontend
 
@@ -38,10 +40,10 @@ Frontend application code lives under `frontend/app/` and follows Nuxt 4 convent
 The current draft is held in Nuxt state for the browser session. Candidate data and credentials are
 not written to localStorage.
 
-The planned backend is a modular Python application using Django, Django REST Framework, and
-PostgreSQL. It will make server-side drafts authoritative, validate and store CV documents
-privately, enforce duplicate submission rules transactionally, expose minimal status responses,
-and use Django Admin for staff workflows. Backend work has not started.
+The backend lives under `backend/` and uses Django, Django REST Framework, and PostgreSQL-ready
+settings. SQLite is the local bootstrap and test database. PostgreSQL runtime behavior has not been
+validated in this phase. The current API exposes only health and read-only published-vacancy routes;
+fixture-backed frontend behavior remains unchanged.
 
 Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
 
@@ -61,6 +63,15 @@ Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
 |   |-- product-brief.md
 |   |-- testing-strategy.md
 |   `-- implementation-roadmap.md
+|-- backend/
+|   |-- apps/
+|   |   |-- applications/
+|   |   |-- documents/
+|   |   `-- vacancies/
+|   |-- config/
+|   |-- tests/
+|   |-- manage.py
+|   `-- pyproject.toml
 `-- frontend/
     |-- app/
     |   |-- assets/
@@ -116,6 +127,38 @@ npm run build         # Create the Nuxt production build
 Playwright starts the Nuxt development server automatically on `127.0.0.1:3000`. Browser-review
 screenshots are written under `frontend/tests/screenshots/` and are ignored by Git.
 
+## Backend Setup
+
+Requirements:
+
+- Python 3.11, 3.12, or 3.13.
+- PostgreSQL for later integration; SQLite is sufficient for the current local bootstrap and tests.
+
+From the repository root on Windows PowerShell:
+
+```powershell
+Set-Location .\backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py runserver
+```
+
+`backend/.env.example` documents the supported variables. Settings read process environment
+variables directly; the file is not loaded automatically. Without `DATABASE_URL`, development and
+tests use the ignored `backend/db.sqlite3` database. A PostgreSQL URL uses the form shown in the
+example file.
+
+Backend quality commands:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+```
+
 ## Simulated Behavior And Limitations
 
 - Draft answers last only while the current application state remains in memory.
@@ -124,9 +167,12 @@ screenshots are written under `frontend/tests/screenshots/` and are ignored by G
 - Confirmation credentials and status responses are fixed fictional values.
 - Client validation improves feedback but is not a security boundary.
 - Server-side authorization, upload inspection, rate limiting, persistence, retention, and duplicate
-  protection still require the planned backend.
+  submission workflows are not connected to the frontend.
+- Backend models exist, but anonymous draft authorization, status lookup, CV upload/storage, and
+  submission services remain future work.
 - No usability study or accessibility conformance audit has been completed.
-- No CI, deployment, production database, or staff administration system exists.
+- No CI, deployment, production database, or validated operational staff workflow exists; Django
+  Admin registration is a foundation only.
 
 Do not use the current frontend to collect real candidate information.
 

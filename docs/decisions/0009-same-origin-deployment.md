@@ -28,7 +28,7 @@ A reverse proxy routes public pages to Nuxt and API/admin/media-access routes to
 
 ## Follow-Up Work
 
-- Document local and production proxy behavior during Phase 7 deployment work.
+- Document local and production proxy behavior during Phase 6 deployment work.
 - Add deployment checks for cookies, HTTPS, and security headers.
 
 Deployment is not implemented. This decision remains the target topology for the future integrated

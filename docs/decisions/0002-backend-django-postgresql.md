@@ -27,6 +27,12 @@ Django Admin will support internal vacancy and application management. Django RE
 
 ## Follow-Up Work
 
-- Choose exact Django and Python versions in Phase 3.
+- Phase 2 selected Python 3.11, Django 5.2 LTS, DRF 3.17, and psycopg 3.3.
 - Add OpenAPI generation during backend implementation.
 - Add pytest and pytest-django coverage with PostgreSQL.
+
+## Current Status
+
+The Django foundation, models, migrations, admin registration, health endpoint, and read-only
+vacancy API are implemented. SQLite was used locally. PostgreSQL settings parsing is tested, but an
+actual PostgreSQL connection was not validated.

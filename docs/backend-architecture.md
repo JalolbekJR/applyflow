@@ -8,30 +8,25 @@
 - [Django REST Framework throttling](https://www.django-rest-framework.org/api-guide/throttling/)
 - [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html)
 
-These references were checked on 2026-06-14. Recheck exact package versions before Phase 3 backend
-implementation.
+These references were checked before the Phase 2 implementation. Recheck official guidance before
+dependency upgrades or production configuration.
 
-## Planned Stack
+## Implemented Foundation Stack
 
-- Python
-- Django
-- Django REST Framework
-- PostgreSQL
-- pytest
-- pytest-django
-- Ruff
-- Optional mypy where it adds value
-- OpenAPI documentation
-- Docker planning
-- GitHub Actions planning
+- Python 3.11.
+- Django 5.2 LTS and Django REST Framework.
+- PostgreSQL-ready settings through psycopg; SQLite for local bootstrap and tests.
+- pytest, pytest-django, and Ruff.
+
+OpenAPI generation, Docker, CI, and production deployment remain future work.
 
 ## Django Apps
 
-Planned apps:
+Implemented apps:
 
 - `vacancies`: public vacancy content and admin editing.
 - `applications`: drafts, submitted applications, lifecycle, status lookup.
-- `documents`: CV storage, validation, private access, deletion.
+- `documents`: metadata ownership boundary only; no upload, storage, or download behavior.
 
 Do not create a generic `core` app by default. Shared settings, URL routing, and project configuration belong in the Django project package. A small shared module can be added later only for concrete cross-app behavior such as audit event helpers or common timestamp mixins.
 
@@ -48,9 +43,10 @@ Do not create a generic `core` app by default. Shared settings, URL routing, and
 | Storage | Private document save, download, deletion. |
 | Audit helpers | Privacy-safe event records. |
 
-Views should stay thin. Services should hold operations such as create draft, update draft, attach document, submit application, create status credentials, and delete expired drafts.
+Views stay thin. Phase 2 implements only health and read-only vacancy views. State-changing services
+remain planned for later phases.
 
-## Planned Services
+## Future Services
 
 - `create_application_draft(vacancy, request_context)`
 - `update_application_draft(draft, data)`
@@ -74,6 +70,10 @@ These names are illustrative. Implementation should keep functions small and tes
 - Server-side validation remains authoritative.
 - Public APIs return generic errors when disclosure would help enumeration.
 - Production settings must pass Django deployment checks.
+
+Phase 2 defaults unmarked DRF views to staff-only permission. Health and published-vacancy views are
+explicitly anonymous and read-only. Candidate authentication, draft authorization, document access,
+and submission permissions are not implemented.
 
 ## Validation
 

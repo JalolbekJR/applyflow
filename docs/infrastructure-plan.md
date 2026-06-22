@@ -1,18 +1,19 @@
 # Infrastructure Plan
 
-The Phase 1 Nuxt frontend runs locally. Production infrastructure, Docker configuration, Django,
-DRF, PostgreSQL, private document storage, and deployment configuration are not implemented.
+The Nuxt frontend and Django backend foundation run locally. Django supports PostgreSQL through
+`DATABASE_URL`; SQLite is the default local bootstrap. Production infrastructure, private document
+storage, Docker, and deployment configuration are not implemented.
 
 ## Local Development Services
 
-Current service:
+Current local services:
 
 - Frontend: Nuxt development server.
-
-Planned services:
-
 - Backend: Django development server.
-- Database: PostgreSQL.
+- Database: SQLite by default, or an explicitly configured PostgreSQL service.
+
+Planned capability:
+
 - Private document storage: local private directory served only through authorized Django views.
 
 Redis and Celery are not planned for version one. Cleanup can start as a Django management command until a real queue requirement appears.
@@ -51,7 +52,7 @@ Planned concerns:
 
 ## Docker Planning
 
-Docker and deployment configuration are deferred until Phase 7.
+Docker and deployment configuration are deferred until Phase 6.
 
 Planned requirements:
 

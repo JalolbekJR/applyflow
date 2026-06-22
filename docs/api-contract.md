@@ -1,7 +1,8 @@
 # API Contract
 
-This contract is a backend proposal. No API is implemented. Refine it during Phase 3 and represent
-the implemented contract with OpenAPI later.
+Phase 2 implements `/api/v1/health/` and the two read-only vacancy endpoints. All draft, document,
+submission, and status endpoints below remain proposed. Represent the implemented contract with
+OpenAPI in a later phase.
 
 ## Principles
 
@@ -16,14 +17,24 @@ the implemented contract with OpenAPI later.
 
 ## Endpoints
 
+### Health
+
+| Method | Path | Purpose | Status |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/health/` | Return `{ "status": "ok" }` without configuration details. | Implemented |
+
 ### Vacancies
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/vacancies/` | List active vacancies. |
-| `GET` | `/api/v1/vacancies/{slug}/` | Return vacancy detail. |
+| Method | Path | Purpose | Status |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/vacancies/` | List published, non-expired vacancies. | Implemented |
+| `GET` | `/api/v1/vacancies/{slug}/` | Return published vacancy detail. | Implemented |
+
+Mutation methods are not exposed for vacancies.
 
 ### Application Drafts
+
+Status: planned; no route is implemented.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -46,6 +57,8 @@ The `{draft_id}` is not proof of ownership. Draft access also requires the serve
 
 ### Documents
 
+Status: planned; no route or storage behavior is implemented.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/v1/application-drafts/{draft_id}/documents/` | Upload CV for a draft. |
@@ -55,11 +68,15 @@ Version one permits one active CV per draft. The upload endpoint accepts PDF onl
 
 ### Submission
 
+Status: planned; no route is implemented.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/v1/application-drafts/{draft_id}/submit/` | Validate and atomically submit. |
 
 ### Status Lookup
+
+Status: planned; no route is implemented.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

@@ -1,6 +1,8 @@
 # Domain Model
 
-This is a backend model proposal. No database schema or migration exists yet.
+Phase 2 implements the vacancy, application draft, submitted application, and document-metadata
+schema with UUID identifiers and initial migrations. SQLite was used for local migration and test
+validation; PostgreSQL configuration is present but runtime behavior was not tested.
 
 ## Diagram
 
@@ -17,9 +19,9 @@ erDiagram
         string slug
         text summary
         text description
-        boolean active
-        date published_at
-        date closing_at
+        string status
+        datetime published_at
+        datetime closing_at
     }
 
     ApplicationDraft {
@@ -89,7 +91,7 @@ erDiagram
 
 ## Vacancy
 
-Planned fields:
+Implemented fields:
 
 - `id`
 - `title`
@@ -102,7 +104,7 @@ Planned fields:
 - `location`
 - `work_format`
 - `employment_type`
-- `active`
+- `status` (`draft`, `published`, or `closed`)
 - `published_at`
 - `closing_at`
 - `created_at`
@@ -113,7 +115,8 @@ Constraints and indexes:
 - Unique slug.
 - Index active and closing date for public lists.
 - Closing date may be null.
-- Public list responses include only active vacancies; a closed detail page may remain available with application disabled.
+- The current read-only API returns only published vacancies that have not passed their closing
+  time. Closed-vacancy publication behavior can be reconsidered with frontend integration.
 
 One vacancy record represents one publication in version one. A materially changed or reopened role is represented by a new vacancy record rather than a publication-cycle entity.
 
@@ -143,7 +146,9 @@ Primary candidate data uses explicit structured fields:
 
 Do not place these fields in an unrestricted JSON blob. A small schema-bounded JSON field may be considered later for genuinely optional metadata, but it is not a version-one requirement.
 
-Only a secure hash of the draft credential is stored. The credential authorizes one active anonymous draft per browser and is invalidated at submission or abandonment.
+Only a secure hash of a draft credential can be stored. Credential generation, cookie delivery,
+authorization, one-active-draft-per-browser enforcement, and invalidation workflows are not yet
+implemented.
 
 ## Application
 
@@ -162,7 +167,8 @@ Constraints and indexes:
 - Unique `application_reference`.
 - Index vacancy and status for authorized admin review.
 - Status is limited to `submitted`, `under_review`, or `closed`.
-- Submitted candidate fields are immutable; authorized status changes are audited.
+- Django Admin treats submitted candidate fields as read-only. Domain-service immutability and
+  audited status changes remain future work.
 
 The product rule is one submitted application per normalized email and vacancy record. The constraint is authoritative and submission occurs in an atomic transaction. A frontend pre-check is not sufficient protection.
 
@@ -172,7 +178,8 @@ Do not create a reusable skill taxonomy in version one. Store a bounded structur
 
 ## ApplicationDocument
 
-Version one permits one private PDF CV per draft or submitted application.
+The Phase 2 model stores document metadata and enforces exactly one owner plus at most one active
+record per owner. It does not upload, save, inspect, expose, or delete file contents.
 
 Planned rules:
 
