@@ -65,8 +65,11 @@ Secondary users planned for the backend phase:
 
 ## Planned Backend Scope
 
-- Server-side expiring drafts.
-- Secure private PDF upload and authorized download.
+- Server-side expiring drafts with one active browser-owned draft at a time, seven-day inactivity
+  renewal, a thirty-day absolute limit, and the vacancy deadline as the effective cap.
+- Optional bounded employment entries for concise experience context.
+- Secure private PDF upload, with authenticated staff download considered only in a later reviewed
+  phase.
 - Atomic submission and duplicate protection.
 - Private application-status lookup.
 - Django Admin for internal vacancy and application management.
@@ -76,10 +79,12 @@ Secondary users planned for the backend phase:
 
 1. Position: confirm the selected vacancy and application requirements.
 2. Candidate details: full name, email, optional phone and profile link, and preferred contact method.
-3. Experience: CV, experience level, relevant skills, optional message, and privacy acknowledgement.
+3. Experience: CV, experience level, relevant skills, up to five optional concise employment
+   entries, optional message, and privacy acknowledgement.
 4. Review and submit: review every value, edit earlier steps, and submit once.
 
 The flow does not ask candidates to repeat long employment histories already contained in a CV.
+Employment entries remain optional, month-level, concise, and capped at five.
 
 ## Non-Goals
 

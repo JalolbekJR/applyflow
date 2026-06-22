@@ -1,86 +1,249 @@
 # API Contract
 
-Phase 2 implements `/api/v1/health/` and the two read-only vacancy endpoints. All draft, document,
-submission, and status endpoints below remain proposed. Represent the implemented contract with
-OpenAPI in a later phase.
+Phase 2 implements health and read-only vacancy endpoints. Phase 3 adds authorized application
+drafts, bounded experience entries, and private CV upload and mutation. Final submission and public
+status lookup remain Phase 4 work and are not part of this contract.
 
 ## Principles
 
-- Version all public API routes under `/api/v1/`.
-- Use server-side validation as the authority.
-- Avoid numeric IDs as proof of ownership.
-- Keep candidate endpoints anonymous but rate limited.
-- Return generic errors where detailed errors would help enumeration.
-- Keep document access private.
-- Use same-origin cookies for draft authorization when implemented.
-- Keep `application_reference` separate from `status_lookup_secret`; the readable reference is not confidential and is not an authorization credential.
+- Version candidate APIs under `/api/v1/`.
+- Keep every candidate API same-origin. Do not add CORS middleware for Phase 3.
+- Treat server-side validation and object authorization as authoritative.
+- Use a same-origin HttpOnly cookie for anonymous draft ownership; never use a numeric or UUID
+  identifier as proof of ownership.
+- Require Django CSRF protection on every unsafe request, including anonymous draft creation.
+- Return the existing API error envelope and use the same generic `draft_unavailable` response for
+  missing, incorrect, expired, abandoned, or cross-draft credentials.
+- Return `Cache-Control: no-store` on CSRF, draft, candidate, experience, and document responses.
+- Never return a draft credential, credential hash, storage key, checksum, or public document URL in
+  JSON.
+- Return `ETag: "draft-<version>"` on every authorized draft read or mutation response.
+- Require `If-Match: "draft-<expected-version>"` on every unsafe draft mutation. Missing `If-Match`
+  returns `428 draft_version_required`; a stale version returns `409 draft_conflict`; the client
+  must re-fetch before retrying.
 
-## Endpoints
-
-### Health
-
-| Method | Path | Purpose | Status |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/health/` | Return `{ "status": "ok" }` without configuration details. | Implemented |
-
-### Vacancies
-
-| Method | Path | Purpose | Status |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/vacancies/` | List published, non-expired vacancies. | Implemented |
-| `GET` | `/api/v1/vacancies/{slug}/` | Return published vacancy detail. | Implemented |
-
-Mutation methods are not exposed for vacancies.
-
-### Application Drafts
-
-Status: planned; no route is implemented.
+## Implemented Phase 2 Endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/v1/application-drafts/` | Create draft for a vacancy and set the active-draft cookie. |
-| `GET` | `/api/v1/application-drafts/{draft_id}/` | Restore draft after authorization. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/` | Update draft fields. |
-| `DELETE` | `/api/v1/application-drafts/{draft_id}/` | Abandon draft and delete draft documents. |
+| `GET` | `/api/v1/health/` | Return `{ "status": "ok" }` without configuration details. |
+| `GET` | `/api/v1/vacancies/` | List published, non-expired vacancies. |
+| `GET` | `/api/v1/vacancies/{slug}/` | Return published vacancy detail. |
 
-The `{draft_id}` is not proof of ownership. Draft access also requires the server-generated secret. Version one allows one active anonymous draft per browser.
+Vacancy mutation methods are not exposed.
 
-`POST /api/v1/application-drafts/` has these canonical outcomes:
+## Phase 3 Endpoint Summary
 
-- No active-draft credential presented: create one and return `201`.
-- Valid active draft for the requested vacancy: restore it and return `200`; do not create another.
-- Valid active draft for another vacancy: return `409 active_draft_conflict` so the interface can offer continue or abandon; do not create another.
-- Invalid or expired active-draft credential presented to the create endpoint: return a generic safe response, clear the unusable cookie when appropriate, and do not create a draft in the same request.
-- Continue: restore the existing draft and navigate to its vacancy flow.
-- Abandon: authorize and delete the existing draft and its document, clear the credential, then permit a new create request.
-- For restore, update, delete, or submit requests that target a draft, a missing, invalid, or expired credential returns a generic safe response and does not reveal whether another draft exists.
+All draft and document paths require the `applyflow_draft` ownership cookie unless marked
+otherwise. `GET` and `HEAD` are safe and do not require a CSRF header. Every `POST`, `PATCH`, `PUT`,
+and `DELETE` requires `X-CSRFToken`.
 
-### Documents
+| Method | Path | Purpose | Success | Expected errors | Idempotency |
+| --- | --- | --- | --- | --- | --- |
+| `GET` | `/api/v1/csrf/` | Set the CSRF cookie and return a masked token for the request header. | `200` | `500` | Safe and repeatable. |
+| `GET` | `/api/v1/application-drafts/active/` | Resolve the draft authorized by the ownership cookie. | `204` no cookie, `200` active draft | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. Invalid, expired, revoked, or malformed ownership clears the cookie. |
+| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error`, `429 rate_limited` | Idempotent for the same valid cookie and vacancy. An invalid cookie is cleared and never creates a draft in the same request. |
+| `GET` | `/api/v1/application-drafts/{draft_id}/` | Read the authorized draft aggregate. | `200` | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. |
+| `PATCH` | `/api/v1/application-drafts/{draft_id}/candidate/` | Partially update candidate fields. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result. |
+| `PATCH` | `/api/v1/application-drafts/{draft_id}/experience/` | Partially update experience level, skills, message, and acknowledgement. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Same as candidate update. |
+| `POST` | `/api/v1/application-drafts/{draft_id}/experiences/` | Create one bounded employment entry. | `201` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Not automatically repeatable. Disable duplicate activation and re-fetch before retrying after an unknown result. |
+| `PATCH` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Partially update an owned employment entry. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Data-idempotent for the current `If-Match`. |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Delete an owned employment entry. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/` | Abandon and revoke the draft, scrub candidate data, and queue physical document cleanup. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request revokes the secret and clears the cookie. A repeat is safe and returns the generic `404`. |
+| `GET` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Retrieve authorized singleton CV metadata only. | `200` | `404 draft_unavailable` | Safe and repeatable. |
+| `PUT` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Create or replace the authorized singleton CV after the new file passes validation. | `201` created, `200` replaced | `404 draft_unavailable`, `409 draft_conflict`, `413 upload_too_large`, `415 unsupported_file_type`, `422 invalid_pdf`, `428 draft_version_required`, `429 rate_limited` | Replacement is one logical operation. Re-fetch after an unknown result; never blindly resend file bytes. |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Logically delete the authorized singleton CV and schedule physical deletion. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
 
-Status: planned; no route or storage behavior is implemented.
+Phase 3 does not expose document contents. There is no candidate or public download endpoint, no
+storage URL, and no staff mutation API. A later staff download, if approved, must be an
+authenticated, object-authorized streaming response with safe attachment headers.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/application-drafts/{draft_id}/documents/` | Upload CV for a draft. |
-| `DELETE` | `/api/v1/application-drafts/{draft_id}/documents/{document_id}/` | Remove draft document. |
+## CSRF Bootstrap
 
-Version one permits one active CV per draft. The upload endpoint accepts PDF only, enforces the 5 MB maximum, performs server-side signature/content inspection, and stores the file privately under a generated name. A second active document is rejected until the candidate removes the current one.
+Request:
 
-### Submission
+```http
+GET /api/v1/csrf/
+Accept: application/json
+```
 
-Status: planned; no route is implemented.
+Response:
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/application-drafts/{draft_id}/submit/` | Validate and atomically submit. |
+```json
+{
+  "csrf_token": "masked-django-csrf-token"
+}
+```
 
-### Status Lookup
+The response generates and returns Django's masked CSRF token, sets or refreshes the normal Django
+CSRF cookie, preserves `Vary: Cookie`, and uses `Cache-Control: no-store`. The frontend keeps the
+masked token in memory, sends it as `X-CSRFToken` on unsafe same-origin requests, and reacquires a
+fresh token after a CSRF rejection when that retry is appropriate. The endpoint is not a
+draft-authentication endpoint, and the CSRF cookie remains separate from the HttpOnly draft
+ownership cookie.
 
-Status: planned; no route is implemented.
+## Draft Aggregate
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/application-status/lookup/` | Return minimal status for application reference plus status lookup secret. |
+A successful create, resolve, or read returns the same aggregate shape:
+
+```json
+{
+  "draft": {
+    "id": "4de2b191-1a54-4a48-b4ff-799e6b900102",
+    "status": "active",
+    "version": 3,
+    "vacancy": {
+      "slug": "frontend-developer",
+      "title": "Frontend Developer"
+    },
+    "candidate": {
+      "full_name": "Avery Example",
+      "email": "avery.candidate@example.test",
+      "phone": "",
+      "portfolio_url": "https://example.test/avery",
+      "preferred_contact_method": "email"
+    },
+    "experience": {
+      "experience_level": "mid_level",
+      "skills": ["Vue 3", "TypeScript", "Accessibility"],
+      "optional_message": "",
+      "consent_acknowledged": true
+    },
+    "experience_entries": [],
+    "document": {
+      "original_name_display": "avery-example-cv.pdf",
+      "detected_content_type": "application/pdf",
+      "size": 42137,
+      "uploaded_at": "2026-06-22T09:00:00Z"
+    },
+    "last_activity_at": "2026-06-22T09:00:00Z",
+    "expires_at": "2026-06-29T09:00:00Z"
+  }
+}
+```
+
+The aggregate deliberately excludes `secret_hash`, `credential_revoked_at`, `email_normalized`,
+`storage_key`, `sha256`, and physical-deletion state.
+
+Every authorized draft response also returns:
+
+```http
+ETag: "draft-3"
+```
+
+`expires_at` is the effective expiry boundary for candidate access. It never exceeds seven days
+after the last successful mutation, thirty days after draft creation, or the vacancy application
+deadline.
+
+## Draft Creation And Conflict
+
+Request:
+
+```json
+{
+  "vacancy_slug": "frontend-developer"
+}
+```
+
+Canonical outcomes:
+
+- No ownership cookie: create an active draft, set the cookie, and return `201`.
+- Valid active draft for the requested vacancy: return the existing aggregate with `200` and do not
+  create or rotate credentials.
+- Valid active draft for another vacancy: return `409 active_draft_conflict`. The frontend can call
+  the active-draft endpoint to render the authorized existing vacancy and offer continue or abandon.
+- Invalid, expired, abandoned, or revoked cookie: clear it and return generic
+  `404 draft_unavailable`; do not create a replacement in the same request.
+- Missing or unavailable vacancy: return `404 vacancy_unavailable` without creating a draft.
+
+The frontend may retry creation only after the unusable cookie has been cleared and the candidate
+chooses to start again. This prevents an attacker-supplied cookie from being adopted as a new
+credential.
+
+The active-draft bootstrap endpoint behaves as follows:
+
+- No ownership cookie: return `204` and do not create a draft.
+- Valid active draft: return `200` with the aggregate and `ETag`.
+- Malformed, invalid, expired, or revoked cookie: clear it and return generic
+  `404 draft_unavailable`.
+
+## Mutation Requests
+
+Every unsafe mutation sends the current draft version in the `If-Match` header:
+
+```http
+If-Match: "draft-3"
+```
+
+If `If-Match` is missing, return `428 draft_version_required`. If the draft has already advanced,
+return `409 draft_conflict` and do not apply a partial change.
+
+Every successful mutation returns a fresh:
+
+```http
+ETag: "draft-<new-version>"
+```
+
+Candidate example:
+
+```json
+{
+  "full_name": "Avery Example",
+  "preferred_contact_method": "email"
+}
+```
+
+Experience summary example:
+
+```json
+{
+  "experience_level": "mid_level",
+  "skills": ["Vue 3", "TypeScript", "Accessibility"],
+  "optional_message": "Fictional context for the application.",
+  "consent_acknowledged": true,
+  "consent_version": "privacy-v1"
+}
+```
+
+Employment-entry example:
+
+```json
+{
+  "organization": "Example Studio",
+  "role_title": "Frontend Developer",
+  "start_month": "2024-01",
+  "end_month": null,
+  "is_current": true,
+  "summary": "Built accessible fictional product interfaces.",
+  "position": 0
+}
+```
+
+Employment entries are optional, capped at five per draft, and bounded to short structured fields.
+They do not replace the CV or turn the form into a full employment-history or resume-builder
+workflow. The existing free-text experience summary remains optional alongside zero to five ordered
+entries.
+
+Incomplete drafts may save valid partial fields. Cross-field validation still applies when both
+fields are present, and Phase 4 performs final completeness and consent validation before
+submission.
+
+## Document Requests
+
+Singleton CV create and replacement use `multipart/form-data` with:
+
+- `file`: one PDF.
+
+`PUT /api/v1/application-drafts/{draft_id}/documents/cv/` creates the active CV when none exists
+and replaces it when one already exists. No public document identifier is required for normal
+candidate operations. The response contains only the safe document metadata shown in the draft
+aggregate plus refreshed expiry timestamps. It never contains a storage path, checksum, internal
+document UUID, or download URL.
+
+Replacement preserves the current active document until the new file has passed validation and has
+been stored. A failed replacement leaves the previous document active. Delete makes the document
+unavailable before physical storage cleanup runs. Phase 3 exposes metadata only: there is no
+candidate, public, or staff download endpoint and no public storage URL.
 
 ## Error Shape
 
@@ -101,82 +264,37 @@ Rules:
 
 - `message` is safe to show to candidates.
 - `fields` maps server validation to inputs.
-- `request_id` helps support without exposing internals.
-- Internal exception details are not returned.
-
-## Example Draft Creation
-
-Request:
-
-```http
-POST /api/v1/application-drafts/
-Content-Type: application/json
-
-{
-  "vacancy_slug": "frontend-developer"
-}
-```
-
-Response:
-
-```json
-{
-  "draft_id": "4de2b191-1a54-4a48-b4ff-799e6b900102",
-  "vacancy": {
-    "slug": "frontend-developer",
-    "title": "Frontend Developer"
-  },
-  "expires_at": "2026-06-21T09:00:00Z"
-}
-```
-
-The backend sets an appropriately protected same-origin HttpOnly cookie containing the active-draft credential. Only its secure hash is stored server-side. The frontend must not store the credential in localStorage. Cookie attributes and lifetime are finalized during backend implementation.
-
-## Example Submission Response
-
-```json
-{
-  "application_reference": "AF-9Q2K-M7P4",
-  "status_lookup_secret": "slk_9Wn6zQp4v2T8mR7cX5bL3kY1",
-  "status_lookup_path": "/application/status",
-  "submitted_at": "2026-06-14T09:00:00Z"
-}
-```
-
-The `status_lookup_secret` is delivered in the successful submission response for immediate confirmation display because email delivery is out of scope. The response must use `Cache-Control: no-store`; the secret must not appear in a URL, log, analytics event, or localStorage. The frontend holds it only in memory for the confirmation flow. It is not recoverable through self-service in version one.
-
-## Example Status Lookup Request
-
-```json
-{
-  "application_reference": "AF-9Q2K-M7P4",
-  "status_lookup_secret": "slk_9Wn6zQp4v2T8mR7cX5bL3kY1"
-}
-```
-
-Email is not used as a status secret. The API should return the same generic failure for wrong reference, wrong secret, revoked secret, expired credential, or rate-limited abuse.
-
-A successful lookup returns only the candidate-facing status label, vacancy title, submitted date, and minimal next-step text. It never returns internal notes, ranking, staff identities, or rejection reasoning.
+- `request_id` is generated once per request, returned in the `X-Request-ID` response header, and
+  reused in the error body.
+- Internal exceptions, candidate text, cookie contents, hashes, filenames, checksums, and storage
+  keys are not returned.
+- A request for another draft, experience entry, or document receives the same
+  `404 draft_unavailable` envelope as a missing resource.
+- CSRF failure returns `403 csrf_failed` through the same envelope without disabling middleware.
 
 ## Status Codes
 
-| Code | Meaning |
+| Code | Meaning in Phase 3 |
 | --- | --- |
-| `200` | Request succeeded. |
-| `201` | Draft or resource created. |
-| `204` | Delete succeeded. |
-| `400` | Malformed request. |
-| `401` | Draft secret missing or invalid. |
-| `403` | Authenticated but not allowed. |
-| `404` | Resource missing or intentionally hidden. |
-| `409` | Duplicate submission or invalid state transition. |
-| `413` | Upload too large. |
-| `415` | Unsupported file type. |
-| `422` | Field validation failed. |
-| `429` | Rate limit exceeded. |
+| `200` | Read, restore, update, or replacement succeeded. |
+| `201` | Draft, experience entry, or initial document was created. |
+| `204` | Abandonment or deletion succeeded. |
+| `400` | Malformed JSON, multipart data, or request shape. |
+| `403` | CSRF validation failed. Object authorization failures do not use this code. |
+| `404` | Vacancy unavailable or draft/resource intentionally hidden. |
+| `409` | Active-vacancy mismatch, stale draft version, or invalid resource state. |
+| `413` | Request or file exceeds configured limits. |
+| `415` | Declared or detected file type is unsupported. |
+| `422` | Candidate, experience, or PDF content validation failed. |
+| `428` | An unsafe mutation omitted the required `If-Match` header. |
+| `429` | Anonymous request limit exceeded. |
 
-## Unresolved
+## Explicitly Deferred
 
-- Exact cookie name and lifetime.
-- Whether draft response returns all form data or only step-specific data.
-- Exact OpenAPI tooling.
+- `POST /api/v1/application-drafts/{draft_id}/submit/`.
+- Application-reference or status-secret generation.
+- `POST /api/v1/application-status/lookup/`.
+- Candidate accounts or cross-device draft recovery.
+- Candidate, public, or staff document download.
+- Staff mutation APIs.
+- OpenAPI tooling selection.

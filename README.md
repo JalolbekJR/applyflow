@@ -3,12 +3,13 @@
 ApplyFlow is a candidate-facing vacancy and job application experience built around a short,
 transparent application process.
 
-The repository is currently in Phase 2. A Nuxt 4 frontend implements vacancy discovery and a
-four-step application flow using fictional fixtures and simulated services. A Django 5.2 backend
-foundation now provides domain models, initial migrations, Django Admin registration, a health
-endpoint, and read-only vacancy APIs. The frontend is not connected to the backend, and candidate
-authentication, authorized drafts, uploads, real submission, deployment, and production operations
-remain unimplemented.
+Phase 2 implementation is complete. A Nuxt 4 frontend implements vacancy discovery and a four-step
+application flow using fictional fixtures and simulated services. A Django 5.2 backend foundation
+provides domain models, initial migrations, Django Admin registration, a health endpoint, and
+read-only vacancy APIs. The Phase 3 architecture and implementation plan for authorized drafts and
+private CV handling is ready for review, but implementation has not started. The frontend is not
+connected to the backend, and authorized drafts, uploads, real submission, deployment, and
+production operations remain unimplemented.
 
 ## Current Frontend
 
@@ -43,7 +44,11 @@ not written to localStorage.
 The backend lives under `backend/` and uses Django, Django REST Framework, and PostgreSQL-ready
 settings. SQLite is the local bootstrap and test database. PostgreSQL runtime behavior has not been
 validated in this phase. The current API exposes only health and read-only published-vacancy routes;
-fixture-backed frontend behavior remains unchanged.
+fixture-backed frontend behavior remains unchanged. The approved Phase 3 plan keeps a same-origin
+modular monolith with one active browser-owned draft at a time, a host-only HttpOnly ownership
+cookie, seven-day inactivity expiry bounded by a thirty-day absolute lifetime and the vacancy
+deadline, `ETag`/`If-Match` optimistic concurrency, and singleton private CV metadata endpoints with
+no candidate download route.
 
 Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
 

@@ -6,21 +6,30 @@ Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/ch
 
 ## Planned Controls
 
-- Strict maximum size. Planned first limit: 5 MB.
+- Strict maximum file size: 5 MiB (`5,242,880` bytes); future proxy request ceiling 6 MiB for
+  multipart overhead.
+- One file per request, empty-file rejection, and chunked reads that stop at the limit.
 - Allowed extension for version one: PDF only.
 - Server-side extension validation.
-- Server-side PDF file-signature and content inspection.
-- Browser-supplied MIME type is not trusted.
+- Declared MIME must be `application/pdf`, but browser-supplied MIME is not trusted.
+- `%PDF-` must begin at byte zero.
+- Strict structural parsing must find a coherent document with 1-10 pages and reject encryption,
+  malformed structure, embedded files, JavaScript, `/OpenAction`, `/AA`, file-attachment
+  annotations, RichMedia, Movie, Sound, Screen, and 3D annotations, plus active forms or automatic
+  actions where detected.
+- Do not render, execute, extract text, extract images, follow links, or invoke an external
+  program.
 - Server-generated storage names.
-- Original filename retained only as sanitized display metadata when staff need it.
+- Original filename normalized with basename extraction, Unicode NFKC, control removal, whitespace
+  collapse, and a 120-character cap for escaped display metadata only.
 - No user-controlled path fragments.
 - Private storage.
 - No public executable upload directory.
-- Safe download headers.
-- Authorization before file access.
+- No candidate, public, or staff download endpoint in Phase 3.
 - Upload throttling.
 - Abandoned-draft cleanup.
-- Deletion behavior tied to retention policy.
+- Logical deletion before retryable physical deletion.
+- SHA-256 integrity metadata that is never returned or logged.
 - Privacy-safe logs.
 - Safe error responses.
 
@@ -31,22 +40,32 @@ Do not use the original filename as a storage path.
 Use a generated storage key such as:
 
 ```text
-applications/{year}/{month}/{uuid}/{generated-name}
+drafts/{draft_uuid}/{document_uuid}.pdf
 ```
 
 This is illustrative. The final implementation must ensure candidates cannot control path fragments.
 
 ## Validation Order
 
-1. Check request size limits.
-2. Confirm draft authorization.
-3. Check file presence.
-4. Check size.
-5. Check extension allowlist.
-6. Inspect the PDF signature and content structure with the selected server-side library; reject mismatches or unreadable content.
-7. Generate storage key.
-8. Store privately.
-9. Persist metadata.
+1. Confirm draft authorization, CSRF, active state, vacancy, and optimistic version.
+2. Check request and file limits, reject declared size above 5 MiB, and still enforce the limit
+   while streaming regardless of client metadata.
+3. Check file presence and reject zero bytes.
+4. Check extension and declared MIME allowlists.
+5. Check the PDF signature.
+6. Parse structure with the reviewed server-side library and reject malformed, encrypted,
+   zero-page, over-ten-page, embedded, scripted, open-action, automatic-action, and forbidden
+   annotation content.
+7. Normalize display metadata, calculate SHA-256, and generate the storage key.
+8. Store privately using bounded chunked temporary-file handling and clean temporary objects after
+   every rejected or failed operation.
+9. Persist metadata. Compensate by deleting the object if persistence fails.
+
+No PDF parser exists in the current backend dependencies. `pypdf` is the initial candidate, but a
+specific pinned version, license, maintenance status, security history, and resource behaviour must
+be reviewed and approved before dependency files change or installation occurs. Implementation must
+use `PdfReader(..., strict=True)`, catch parser failures, and return only generic validation
+errors.
 
 ## Error Responses
 
@@ -75,16 +94,30 @@ If scanning is later added, document:
 - False-positive handling.
 - Retention impact.
 
-## Download Behavior
+## Phase 3 Access Boundary
 
-Only authenticated staff with explicit object-level permission should download submitted CVs.
+Phase 3 returns authorized document metadata only. It does not expose candidate, public, or staff
+document content and never returns a storage URL. Django Admin shows metadata without a file link.
 
-Downloads should use:
+A future staff download requires authenticated object-level permission, an attachment-only
+streaming response, safe response filename, `nosniff`, no public storage URL, and a privacy-safe
+audit event. That work requires a later review and is not implied by upload implementation.
 
-- Authorization check before storage access.
-- Non-inline content disposition unless a reviewed preview feature is added.
-- Safe filename for the response.
-- Audit event without raw path or candidate personal data.
+## Replacement And Deletion
+
+- Receive into private temporary storage.
+- Enforce the streaming byte limit.
+- Calculate SHA-256.
+- Validate the PDF.
+- Write to a new opaque final key.
+- Lock the draft and active document.
+- Atomically activate new metadata and retire old metadata.
+- Commit the transaction.
+- Delete the retired object after commit.
+- Retain retryable deletion metadata when physical deletion fails.
+- Delete the newly stored object when database activation fails.
+- A failed replacement leaves the old document active, and the previous valid object is never
+  deleted before the new object is committed.
 
 ## Tests Required Later
 
@@ -93,9 +126,13 @@ Downloads should use:
 - Browser MIME, extension, signature, or inspected-content mismatch rejected.
 - Missing or invalid PDF signature rejected.
 - Malformed or unreadable PDF rejected by the selected inspection library.
+- Empty, encrypted, embedded-file, JavaScript, open-action, automatic-action, active-form,
+  file-attachment-annotation, zero-page, and over-ten-page PDFs rejected.
 - Malicious filename does not affect storage path.
 - Unauthorized document access blocked.
-- Staff without document permission cannot download a CV.
-- Deleted draft document is not downloadable.
+- No public, candidate, or staff content route exists in Phase 3.
+- Deleted draft document metadata is unavailable before physical cleanup.
 - Valid upload persists metadata.
+- Failed replacement preserves the old active document.
+- Storage or metadata failure does not create an untracked live object.
 - Logs do not include file contents or storage keys.

@@ -15,12 +15,19 @@ See [ADR 0004](decisions/0004-draft-persistence.md).
 
 Use anonymous server-side drafts with:
 
-- Server-generated high-entropy secret.
+- A server-generated 32-byte random secret, encoded as unpadded base64url.
 - Only a secure hash of the secret stored on the server.
-- Raw credential returned through an appropriately protected HttpOnly cookie in same-origin deployment.
+- A versioned `v1.<draft_uuid>.<raw_secret>` credential returned only through the host-only
+  `applyflow_draft` HttpOnly cookie. The UUID locates a hash; it never authorizes by itself.
 - One active anonymous application draft per browser at a time.
 - Non-sensitive draft identifier in API paths.
-- Expiration.
+- `Secure=True` outside local development, `SameSite=Lax`, no `Domain`, and cookie path
+  `/api/v1/application-drafts/`.
+- Seven days of inactivity, a thirty-day absolute lifetime from creation, and an effective expiry
+  also bounded by the vacancy application deadline.
+- Expiry refreshed only by successful meaningful mutations; reads do not renew retention.
+- Django CSRF middleware plus an in-memory masked token sent as `X-CSRFToken` for every unsafe
+  request.
 - Cleanup of expired drafts and abandoned documents.
 - Explicit structured candidate fields as defined in [domain model](domain-model.md).
 
@@ -28,14 +35,25 @@ Use anonymous server-side drafts with:
 
 Version one intentionally supports one active anonymous application draft per browser.
 
-1. No active draft: create a server-side draft, generate the credential, store only its secure hash, and return the raw credential through the protected cookie.
-2. Active draft for the same vacancy: restore and continue it; do not create another.
-3. Active draft for another vacancy: ask the candidate to continue the existing draft or abandon it.
-4. Continue: restore the existing draft and its vacancy flow; do not create another.
-5. Abandon: authorize and delete the draft and attached document, clear the credential, then permit a new draft.
-6. Submit: atomically create the application, transfer the document, mark the draft submitted, invalidate its credential, and prevent resubmission.
-7. Expired, missing, or invalid credential on a request that targets a draft: return a generic safe response and do not expose whether another draft exists.
-8. Cross-device recovery is not supported.
+1. `GET /api/v1/application-drafts/active/` with no cookie returns `204`.
+2. `GET /api/v1/application-drafts/active/` with a valid active cookie returns `200`.
+3. `GET /api/v1/application-drafts/active/` with a malformed, invalid, expired, or revoked cookie
+   clears the cookie and returns generic `404 draft_unavailable`.
+4. `POST /api/v1/application-drafts/` with no active draft creates one, stores only the secure hash,
+   and returns `201`.
+5. `POST /api/v1/application-drafts/` with an active draft for the same vacancy is idempotent and
+   returns `200`.
+6. `POST /api/v1/application-drafts/` with an active draft for another vacancy returns
+   `409 active_draft_conflict`.
+7. `DELETE /api/v1/application-drafts/{draft_id}/` abandons the active draft, returns `204`,
+   revokes the secret, and clears the cookie.
+8. Submit remains Phase 4 work. Cross-device recovery is not supported.
+
+An invalid cookie on draft creation is cleared but never adopted and never creates a replacement in
+the same request. Ordinary reads and saves do not rotate credentials because concurrent tabs could
+invalidate each other. Successful mutations renew inactivity expiry but never beyond the thirty-day
+absolute limit or vacancy deadline. Abandonment, expiry, invalid ownership, and future submission
+revoke the credential.
 
 ## Privacy
 
@@ -44,7 +62,7 @@ Drafts contain personal data before submission. They must:
 - Expire automatically.
 - Be deleted when abandoned.
 - Avoid unnecessary logging.
-- Avoid localStorage.
+- Avoid localStorage and sessionStorage for candidate data or draft credentials.
 - Avoid inclusion in screenshots or demo fixtures.
 
 ## Token Security
@@ -56,25 +74,37 @@ Draft secrets must be:
 - Stored hashed.
 - Never derived from email, vacancy slug, or database ID.
 - Never accepted as a URL path if a safer cookie-based model is available.
+- Never supplemented by browser fingerprinting or URL credentials.
 
 ## Recovery
 
 Version one supports same-browser recovery only while the active-draft cookie and server draft remain valid. Device switching is not supported.
 
-Expired draft behavior:
+Expired or unavailable draft behavior:
 
-- Explain that the draft expired.
+- Explain that the draft is no longer available.
 - Offer to start a new application.
 - Do not disclose whether a specific draft ID exists.
+
+A same-origin local Nuxt proxy keeps browser API calls on one origin while Nuxt and Django run on
+separate ports. Local HTTP is the only environment where the ownership cookie may use
+`Secure=False`; all other attributes remain unchanged. CORS and JavaScript-readable ownership
+tokens are not fallbacks.
 
 ## Cleanup
 
 Expired draft cleanup should:
 
-- Delete draft data.
-- Delete abandoned draft documents.
+- Revoke the credential and scrub candidate fields before storage work can be retried.
+- Delete experience entries and logically remove the active document.
+- Retry physical private-storage deletion using durable metadata.
+- Hard-delete the scrubbed draft shell after physical deletion succeeds.
+- Remove confirmed unreferenced provider keys only after a 24-hour grace period.
 - Record privacy-safe cleanup counts.
 - Avoid logging candidate fields.
+
+Cleanup is an idempotent, batch-bounded Django management command with dry-run output in Phase 3.
+Scheduling and queue infrastructure remain deferred.
 
 ## Implementation Cost
 

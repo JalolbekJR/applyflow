@@ -22,13 +22,24 @@ See [field inventory](field-inventory.md) for purpose, validation, privacy class
 
 ## Draft Retention
 
-Planned rule:
+Phase 3 planned rule:
 
-- Drafts expire after a short period, such as 7 days.
-- Expired drafts are deleted by a cleanup process.
-- Abandoned draft documents are deleted with the draft.
+- Drafts expire after seven days without a successful meaningful mutation, thirty days after
+  creation, or at the vacancy application deadline, whichever comes first.
+- Candidate, experience, experience-entry, and CV mutations refresh `last_activity_at`,
+  `expires_at`, and the ownership-cookie lifetime together, but never beyond the thirty-day
+  absolute limit or vacancy deadline. Reads do not extend retention.
+- Expiry or confirmed abandonment immediately revokes access, scrubs structured candidate fields,
+  deletes experience entries, blanks original filename display metadata, and makes the CV logically
+  unavailable.
+- Physical document deletion is retryable. A scrubbed draft shell may remain only while its private
+  storage key is needed for cleanup, then the shell and metadata are hard-deleted.
+- Abandonment, expiry, revocation, and invalid ownership clear the ownership cookie.
+- Stale unreferenced storage objects receive a 24-hour grace period before orphan cleanup so an
+  in-flight or compensating transaction is not deleted prematurely.
 
-Any exact period is a proposed operational policy and requires legal and organizational review before real recruitment use. This project does not claim legal validation.
+The seven-day period is the Phase 3 engineering default, not a legally validated retention policy.
+Real recruitment use still requires legal and organizational review.
 
 ## Submitted Application Retention
 
@@ -42,7 +53,9 @@ Current recommendation:
 
 ## Document Retention
 
-CV documents follow the submitted application retention policy. Draft documents are deleted with expired or abandoned drafts.
+CV documents follow the submitted application retention policy after Phase 4. Draft documents are
+logically removed with expired or abandoned drafts and physically removed by retryable cleanup.
+Phase 3 has no candidate, public, or staff download endpoint and no public storage URL.
 
 ## Deletion Workflow
 
@@ -89,6 +102,11 @@ These are target controls. Phase 2 includes schema and safe admin/API defaults o
 authorization, status-secret lookup, and document access are not implemented. The frontend remains
 fixture-backed and must not collect real candidate data.
 
+Phase 3 ownership is one active draft per browser. The browser receives a host-only HttpOnly cookie
+containing a versioned draft UUID plus a 256-bit random secret; only the secret hash is stored. The
+cookie is `Secure` outside local development, uses `SameSite=Lax`, and is restricted to draft API
+paths. No localStorage, sessionStorage, browser fingerprint, or cross-device identity is collected.
+
 ## Logging Restrictions
 
 Do not log:
@@ -101,6 +119,10 @@ Do not log:
 - Storage key.
 - Draft secret.
 - Status lookup secret.
+- Candidate or experience request/response bodies.
+- Cookie or CSRF token values.
+- Credential hashes.
+- Document checksum.
 
 Application references may appear in support workflows, but they must not be treated as proof of ownership.
 
@@ -112,6 +134,19 @@ Allowed logs:
 - Vacancy ID.
 - Actor type.
 - Timestamp.
+- Result or rejection category.
+- HTTP status and duration.
+- Opaque draft or document UUID only in restricted security events where incident correlation
+  requires it.
+
+Ordinary Phase 3 application logs do not collect browser fingerprints or persist source IP
+addresses. If a future edge rate-limit or incident process retains network identifiers, it requires
+its own purpose, access, and retention review.
+
+Initial engineering retention targets are 14 days for ordinary application logs, 30 days for
+restricted security-denial events, and 90 days for aggregate cleanup evidence. These targets are
+not legal advice and must be reviewed before real recruitment use. Local development should avoid
+persistent request logs and use only fictional candidate data.
 
 ## Test And Demo Data
 

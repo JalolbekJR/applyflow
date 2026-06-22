@@ -68,7 +68,7 @@ Future work:
 
 ## Phase 2 - Django, DRF, PostgreSQL, And Django Admin
 
-Status: current.
+Status: complete.
 
 Objective: make the backend the source of truth for vacancies and staff-managed application records.
 
@@ -90,19 +90,127 @@ Production database or migration actions require separate approval.
 
 ## Phase 3 - Secure Drafts And Private CV Upload
 
-Status: not started.
+Status: architecture and implementation plan ready for review; implementation not started.
 
-Objective: replace in-memory fixture behavior with authorized, expiring server-side drafts and
-private document storage.
+Objective: replace in-memory fixture draft persistence with authorized, expiring server-side drafts,
+bounded employment entries, and private PDF upload/metadata/replacement/deletion while preserving
+the accepted four-step frontend.
 
-Planned work:
+Accepted planning decisions:
 
-- High-entropy draft credentials delivered through a same-origin secure HttpOnly cookie.
-- One active anonymous draft per browser, with continue and abandon behavior.
-- Draft expiration and cleanup.
-- PDF-only upload with extension, signature, content, and size validation on the server.
-- Server-generated storage names, private storage, authorized download, and safe deletion.
-- Recoverable upload errors that preserve other candidate data.
+- One active anonymous draft total per browser, matching ADR 0004 and the existing conflict UI.
+- A server-generated 256-bit random secret in a same-origin host-only HttpOnly cookie; only its
+  password-style hash is stored.
+- `Secure=True` outside local development, `SameSite=Lax`, and a path restricted to Phase 3 draft
+  APIs. The cookie is renewed only after successful mutations and cleared after abandonment, expiry,
+  revocation, or invalid ownership.
+- Django CSRF middleware on every unsafe request, with a no-store token-bootstrap endpoint and
+  `X-CSRFToken` from the Nuxt service.
+- Same-origin browser APIs in production and through a local Nuxt development proxy; no CORS
+  dependency.
+- Seven-day inactivity expiry bounded by a thirty-day absolute lifetime from creation and the
+  vacancy deadline. Reads never renew expiry. Successful mutations renew only within those bounds.
+- Optimistic draft versions through `ETag` and `If-Match` plus short database row locks; missing
+  `If-Match` returns `428 draft_version_required`, and stale clients receive a conflict instead of
+  silent last-write-wins behavior.
+- Optional, bounded employment entries with concise month-level fields, explicit `position`
+  ordering, a five-entry cap, and the existing free-text summary retained alongside them.
+- Private local storage through an application-owned interface, allowing a future object-store
+  adapter without a domain-model redesign.
+- PDF only, 5 MiB maximum, one file per request, 1-10 pages, layered extension/MIME/signature and
+  strict `pypdf` structural checks, generated storage keys, and no malware-scanning claim.
+- Upload, metadata, replacement, and deletion only through the singleton CV endpoint. Candidate,
+  public, and staff document download are excluded from Phase 3.
+- The first checksum migration leaves `sha256` nullable for existing metadata while service-layer
+  creation requires SHA-256 for every new Phase 3 upload.
+- Submission and status lookup remain visibly simulated in the frontend until Phase 4.
+
+### Implementation Slices
+
+Each slice requires its own review before the next security boundary depends on it. Model guidance
+names the preferred model for implementation support, not permission to begin work.
+
+| Slice | Scope | Dependencies | Model recommendation | Reasoning level | Expected validation |
+| --- | --- | --- | --- | --- | --- |
+| 1. Ownership and lifecycle | Cookie helpers, CSRF bootstrap, credential verification, draft version/activity/revocation, seven-day inactivity plus thirty-day absolute expiry, deadline bound, and generic unavailable behavior. | Phase 2 models and ADRs 0004/0009. | GPT-5.5 | High; authorization and lifecycle edge cases are security-critical. | Model/service tests, CSRF enforcement, cookie-attribute assertions, cross-draft/cross-vacancy tests, Django checks. |
+| 2. Draft API | Create/resolve/read, candidate and experience-summary PATCH, API error/request-ID integration, no-store responses. | Slice 1. | GPT-5.5 | High; every endpoint must preserve enumeration-safe authorization. | API matrix, stale-version conflicts, validation mapping, unsupported methods, lint/format/tests. |
+| 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, parent-version increments, frontend types/service contracts. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests. |
+| 4. Private storage abstraction | Provider-neutral interface, private local adapter, ignored root, fake/test adapter, configuration validation. | Slice 1. | GPT-5.5 | High; storage-path and privacy boundaries must be exact. | Traversal/key tests, no public route, adapter contract tests, configuration checks. |
+| 5. Upload validation | Size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, and strict `pypdf` validation. | Slice 4 and the approved parser family, with the exact reviewed version pinned before code changes. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
+| 6. Document mutation API | Singleton CV create/read/replace/delete, compensation, row locks, active uniqueness, and retryable deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, race/conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests. |
+| 7. Frontend integration | Real draft service/composable, browser-only bootstrap, 800 ms autosave, route refresh, conflict/expiry UI, experience CRUD, XHR upload progress/retry/cancel/replace/delete. | Stable API from slices 2, 3, and 6. | GPT-5.4 for primary work; GPT-5.5 for conflict/security review. | High; state recovery and accessibility cross multiple routes. | Format, lint, typecheck, Vitest, build, Playwright candidate flow, responsive/reduced-motion/manual screen-reader spot checks. |
+| 8. Cleanup | Idempotent dry-run/batched management command, revoke/scrub, pending blob deletion, stale-orphan grace period, aggregate logs. | Slices 1, 4, and 6. | GPT-5.5 | High; deletion failures must not leak data or lose cleanup keys. | Dry-run/apply tests, repeated-run tests, storage-failure retries, cleanup eligibility, privacy-log assertions. |
+| 9. Security and regression tests | Complete authorization, CSRF, upload, race, logging, admin, and existing Phase 1/2 regression matrix. | Slices 1-8. | GPT-5.5 | High; independent adversarial review is needed before handoff. | Full backend/frontend suites; PostgreSQL-specific plan executed when an approved service exists; browser interaction review. |
+| 10. Documentation reconciliation | Align README/current-state copy, contracts, runbook outline, settings inventory, and deferred claims with implemented evidence. | Slices 1-9 passing. | GPT-5.4 | Medium; accuracy and handoff consistency are primary. | Link review, `git diff --check`, documentation search for stale simulation/implementation claims. |
+
+### Review Gates
+
+1. **Ownership gate:** cookie, CSRF, generic errors, fixation/replay limits, and one-draft behavior are
+   approved before exposing mutation views.
+2. **Schema gate:** migrations, field privacy, constraints, and rollback SQL are reviewed before any
+   migration is applied.
+3. **Dependency gate:** the exact `pypdf` release, license, maintenance, security history, and
+   resource behavior are reviewed before dependency files change or installation occurs.
+4. **Storage gate:** private-root isolation, generated keys, replacement compensation, and deletion
+   retries pass failure-injection tests before accepting uploads.
+5. **Frontend gate:** existing fixtures remain available until the real API path passes unit,
+   browser, responsive, keyboard, focus, and reduced-motion checks.
+6. **Database gate:** SQLite checks may support implementation, but PostgreSQL row locking,
+   concurrency, and conditional uniqueness must pass before production-readiness claims.
+7. **Phase gate:** review and submit controls remain simulated and no status API is introduced.
+8. **Completion gate:** no skipped required checks, stale capability claims, public document URL, or
+   logged candidate/credential/file data remains.
+
+### Phase 3 Exit Criteria
+
+- Same-browser drafts survive refresh and reject missing, incorrect, expired, revoked, malformed,
+  cross-draft, and cross-vacancy access without enumeration.
+- Candidate fields, experience summary, and bounded experience entries persist server-side with
+  recoverable conflicts.
+- Valid PDFs upload privately and invalid, empty, oversized, spoofed, malformed, encrypted, or
+  active-content PDFs fail safely without losing other draft data.
+- Replacement preserves the previous active document until the new one succeeds; deletion and
+  cleanup remain retryable.
+- Frontend loading, autosave, conflict, expiry, upload, replacement, deletion, and failure states are
+  accessible and do not shift layout.
+- Backend/frontend verification passes, with PostgreSQL-only evidence clearly separated if no
+  approved PostgreSQL runtime is available.
+- Documentation states exactly what is implemented and what remains simulated or deferred.
+
+### Explicit Phase 3 Exclusions
+
+- Final application submission or submitted-record immutability implementation.
+- Status-reference generation, status-secret delivery, or public status lookup.
+- Email notifications, applicant accounts, magic links, or cross-device recovery.
+- Employer-facing workflow changes or staff mutation APIs.
+- Candidate, public, or staff document download.
+- Production object storage, deployment, CI, scheduling, backup, or monitoring integration.
+- Malware-scanning service, quarantine workflow, OCR, CV parsing, or AI features.
+
+### Pre-Implementation Requirements
+
+The plan is approved at the architecture level. Implementation still must:
+
+1. Review and pin the exact `pypdf` release before any dependency or parser code changes.
+2. Keep `sha256` nullable in the first migration while enforcing checksums for every new accepted
+   Phase 3 upload in the service layer.
+3. Treat PostgreSQL row-lock, concurrency, conditional-constraint, and replacement tests as a
+   separate verification track that blocks production claims, not initial coding.
+
+### Principal Risks
+
+- A bearer cookie stolen through device compromise can authorize the draft until revocation or
+  expiry; Phase 3 has no account or device binding.
+- Cookie loss can leave an inaccessible active draft until cleanup and permit a new one because the
+  system deliberately avoids browser fingerprinting.
+- Structural PDF validation reduces format risk but is not malware scanning. Phase 3 avoids staff
+  exposure by excluding document download.
+- Database and storage operations cannot be one transaction; compensation and orphan cleanup must
+  pass failure-injection tests.
+- SQLite cannot prove PostgreSQL locking and concurrent uniqueness behaviour.
+- Local in-memory throttling cannot support production abuse-resistance claims across workers.
+- Production HTTPS, private object-store ACLs, backups, scheduler, monitoring, and incident response
+  remain unimplemented, so real candidate data remains prohibited.
 
 ## Phase 4 - Integrated Submission And Status Lookup
 
