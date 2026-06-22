@@ -1,8 +1,10 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.vacancies.models import Vacancy
 from apps.vacancies.validators import validate_string_list
@@ -49,9 +51,19 @@ class ApplicationDraft(CandidateFields):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vacancy = models.ForeignKey(Vacancy, on_delete=models.PROTECT, related_name="drafts")
     secret_hash = models.CharField(max_length=256, unique=True)
+    creation_key_digest = models.CharField(
+        max_length=64,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     consent_acknowledged = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    version = models.PositiveBigIntegerField(default=1)
+    last_activity_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
+    credential_revoked_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -75,6 +87,56 @@ class ApplicationDraft(CandidateFields):
 
     def check_secret(self, raw_secret: str) -> bool:
         return check_password(raw_secret, self.secret_hash)
+
+    def absolute_expires_at(self):
+        return self.created_at + settings.DRAFT_ABSOLUTE_LIFETIME
+
+    def effective_expiry_at(self, *, last_activity_at=None):
+        activity = last_activity_at or self.last_activity_at
+        limits = [
+            activity + settings.DRAFT_INACTIVITY_LIFETIME,
+            self.absolute_expires_at(),
+        ]
+        if self.vacancy.closing_at is not None:
+            limits.append(self.vacancy.closing_at)
+        return min(limits)
+
+    def is_expired(self, *, now=None) -> bool:
+        now = now or timezone.now()
+        return now >= min(self.expires_at, self.effective_expiry_at())
+
+    def ownership_is_revoked(self) -> bool:
+        return self.credential_revoked_at is not None
+
+    def is_active(self, *, now=None) -> bool:
+        return (
+            self.status == self.Status.ACTIVE
+            and not self.ownership_is_revoked()
+            and not self.is_expired(now=now)
+        )
+
+    def increment_version(self) -> None:
+        self.version += 1
+
+    def record_successful_mutation(self, *, now=None) -> None:
+        now = now or timezone.now()
+        self.last_activity_at = now
+        self.expires_at = self.effective_expiry_at(last_activity_at=now)
+        self.increment_version()
+
+    def revoke_credential(self, *, now=None) -> None:
+        self.credential_revoked_at = now or timezone.now()
+
+    def abandon(self, *, now=None) -> None:
+        now = now or timezone.now()
+        self.status = self.Status.ABANDONED
+        self.revoke_credential(now=now)
+        self.record_successful_mutation(now=now)
+
+    def expire(self, *, now=None) -> None:
+        now = now or timezone.now()
+        self.status = self.Status.EXPIRED
+        self.revoke_credential(now=now)
 
 
 class Application(CandidateFields):

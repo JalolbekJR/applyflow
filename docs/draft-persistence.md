@@ -20,6 +20,9 @@ Use anonymous server-side drafts with:
 - A versioned `v1.<draft_uuid>.<raw_secret>` credential returned only through the host-only
   `applyflow_draft` HttpOnly cookie. The UUID locates a hash; it never authorizes by itself.
 - One active anonymous application draft per browser at a time.
+- A short-lived server-generated creation key stored only in an HttpOnly cookie, with only its keyed
+  digest persisted under a database uniqueness constraint. A replay derives the same ownership
+  credential and resolves the existing row.
 - Non-sensitive draft identifier in API paths.
 - `Secure=True` outside local development, `SameSite=Lax`, no `Domain`, and cookie path
   `/api/v1/application-drafts/`.
@@ -39,8 +42,8 @@ Version one intentionally supports one active anonymous application draft per br
 2. `GET /api/v1/application-drafts/active/` with a valid active cookie returns `200`.
 3. `GET /api/v1/application-drafts/active/` with a malformed, invalid, expired, or revoked cookie
    clears the cookie and returns generic `404 draft_unavailable`.
-4. `POST /api/v1/application-drafts/` with no active draft creates one, stores only the secure hash,
-   and returns `201`.
+4. `POST /api/v1/application-drafts/` with no active draft uses the creation key established by the
+   CSRF bootstrap, creates one row, stores only keyed/password hashes, and returns `201`.
 5. `POST /api/v1/application-drafts/` with an active draft for the same vacancy is idempotent and
    returns `200`.
 6. `POST /api/v1/application-drafts/` with an active draft for another vacancy returns
@@ -48,6 +51,11 @@ Version one intentionally supports one active anonymous application draft per br
 7. `DELETE /api/v1/application-drafts/{draft_id}/` abandons the active draft, returns `204`,
    revokes the secret, and clears the cookie.
 8. Submit remains Phase 4 work. Cross-device recovery is not supported.
+
+Concurrent initial requests carrying the same creation key meet at the database uniqueness
+boundary. The first returns `201`; a concurrent or lost-response retry resolves the same draft and
+returns `200`. A reused key cannot reassign that draft to another vacancy. Different browser
+creation keys remain independent.
 
 An invalid cookie on draft creation is cleared but never adopted and never creates a replacement in
 the same request. Ordinary reads and saves do not rotate credentials because concurrent tabs could
@@ -73,6 +81,8 @@ Draft secrets must be:
 - High entropy.
 - Stored hashed.
 - Never derived from email, vacancy slug, or database ID.
+- Reproducible only for short-lived creation replay through a domain-separated keyed construction;
+  the raw creation key and derivation key are never persisted or returned in JSON.
 - Never accepted as a URL path if a safer cookie-based model is available.
 - Never supplemented by browser fingerprinting or URL credentials.
 

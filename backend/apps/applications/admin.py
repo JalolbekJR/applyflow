@@ -5,11 +5,26 @@ from .models import Application, ApplicationDraft
 
 @admin.register(ApplicationDraft)
 class ApplicationDraftAdmin(admin.ModelAdmin):
-    list_display = ("id", "vacancy", "status", "expires_at", "updated_at")
+    list_display = (
+        "id",
+        "vacancy",
+        "status",
+        "version",
+        "last_activity_at",
+        "expires_at",
+    )
     list_filter = ("status", "vacancy")
     search_fields = ("id", "vacancy__slug")
-    exclude = ("secret_hash",)
-    readonly_fields = ("id", "created_at", "updated_at", "submitted_at")
+    exclude = ("secret_hash", "creation_key_digest")
+    readonly_fields = (
+        "id",
+        "version",
+        "last_activity_at",
+        "credential_revoked_at",
+        "created_at",
+        "updated_at",
+        "submitted_at",
+    )
 
 
 @admin.register(Application)

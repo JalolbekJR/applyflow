@@ -12,6 +12,8 @@ status lookup remain Phase 4 work and are not part of this contract.
 - Use a same-origin HttpOnly cookie for anonymous draft ownership; never use a numeric or UUID
   identifier as proof of ownership.
 - Require Django CSRF protection on every unsafe request, including anonymous draft creation.
+- Use a separate short-lived HttpOnly creation-key cookie and a unique keyed database digest so
+  concurrent initial requests and lost-response retries resolve one logical draft.
 - Return the existing API error envelope and use the same generic `draft_unavailable` response for
   missing, incorrect, expired, abandoned, or cross-draft credentials.
 - Return `Cache-Control: no-store` on CSRF, draft, candidate, experience, and document responses.
@@ -40,9 +42,9 @@ and `DELETE` requires `X-CSRFToken`.
 
 | Method | Path | Purpose | Success | Expected errors | Idempotency |
 | --- | --- | --- | --- | --- | --- |
-| `GET` | `/api/v1/csrf/` | Set the CSRF cookie and return a masked token for the request header. | `200` | `500` | Safe and repeatable. |
+| `GET` | `/api/v1/csrf/` | Set the CSRF cookie, establish a short-lived draft-creation key when needed, and return a masked token for the request header. | `200` | `500` | Safe and repeatable. |
 | `GET` | `/api/v1/application-drafts/active/` | Resolve the draft authorized by the ownership cookie. | `204` no cookie, `200` active draft | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. Invalid, expired, revoked, or malformed ownership clears the cookie. |
-| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error`, `429 rate_limited` | Idempotent for the same valid cookie and vacancy. An invalid cookie is cleared and never creates a draft in the same request. |
+| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error`, `429 rate_limited` | Idempotent for the same valid ownership cookie or unexpired creation key and vacancy. A lost create response can be retried with the same creation key without creating another row. An invalid ownership cookie is cleared and never creates a draft in the same request. |
 | `GET` | `/api/v1/application-drafts/{draft_id}/` | Read the authorized draft aggregate. | `200` | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. |
 | `PATCH` | `/api/v1/application-drafts/{draft_id}/candidate/` | Partially update candidate fields. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result. |
 | `PATCH` | `/api/v1/application-drafts/{draft_id}/experience/` | Partially update experience level, skills, message, and acknowledgement. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Same as candidate update. |
@@ -76,11 +78,12 @@ Response:
 ```
 
 The response generates and returns Django's masked CSRF token, sets or refreshes the normal Django
-CSRF cookie, preserves `Vary: Cookie`, and uses `Cache-Control: no-store`. The frontend keeps the
-masked token in memory, sends it as `X-CSRFToken` on unsafe same-origin requests, and reacquires a
-fresh token after a CSRF rejection when that retry is appropriate. The endpoint is not a
-draft-authentication endpoint, and the CSRF cookie remains separate from the HttpOnly draft
-ownership cookie.
+CSRF cookie, establishes a short-lived HttpOnly creation-key cookie when one is absent or unusable,
+preserves `Vary: Cookie`, and uses `Cache-Control: no-store`. The frontend keeps the masked token in
+memory, sends it as `X-CSRFToken` on unsafe same-origin requests, and reacquires a fresh token after
+a CSRF rejection when that retry is appropriate. The endpoint is not a draft-authentication
+endpoint. The CSRF cookie, creation-key cookie, and draft ownership cookie have separate purposes,
+and none of their raw values is returned as an ownership credential in JSON.
 
 ## Draft Aggregate
 

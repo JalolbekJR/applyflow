@@ -1,10 +1,13 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+APPROVED_DRAFT_COOKIE_PATH = "/api/v1/application-drafts/"
+DRAFT_COOKIE_PATH_ERROR = "DRAFT_COOKIE_PATH must match the approved application drafts path."
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -16,6 +19,51 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
+def env_bounded_positive_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    message = f"{name} must be an ASCII decimal integer between {minimum} and {maximum} seconds."
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        parsed = default
+        if parsed < minimum or parsed > maximum:
+            raise ImproperlyConfigured(message)
+        return parsed
+    if not isinstance(raw_value, str):
+        raise ImproperlyConfigured(message)
+    if not raw_value.isascii() or not raw_value.isdigit():
+        raise ImproperlyConfigured(message)
+    if len(raw_value) > len(str(maximum)):
+        raise ImproperlyConfigured(message)
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ImproperlyConfigured(message) from exc
+    if parsed < minimum or parsed > maximum:
+        raise ImproperlyConfigured(message)
+    return parsed
+
+
+def validate_draft_cookie_path(value: object) -> str:
+    if not isinstance(value, str):
+        raise ImproperlyConfigured(DRAFT_COOKIE_PATH_ERROR)
+    if value != APPROVED_DRAFT_COOKIE_PATH:
+        raise ImproperlyConfigured(DRAFT_COOKIE_PATH_ERROR)
+    if (
+        not value.startswith("/")
+        or not value.endswith("/")
+        or value == "/"
+        or any(character.isspace() for character in value)
+        or any(character in value for character in ("?", "#", ";", "\\"))
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+        or "://" in value
+    ):
+        raise ImproperlyConfigured(DRAFT_COOKIE_PATH_ERROR)
+    return value
+
+
+def draft_cookie_secure(app_env: str, *, configured: bool) -> bool:
+    return app_env != "development" or configured
 
 
 def database_config(url: str | None) -> dict[str, object]:
@@ -76,6 +124,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+CSRF_FAILURE_VIEW = "config.api_errors.csrf_failure"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -122,6 +171,40 @@ SECURE_HSTS_SECONDS = 0
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
+
+DRAFT_COOKIE_NAME = os.getenv("DRAFT_COOKIE_NAME", "applyflow_draft")
+DRAFT_COOKIE_PATH = validate_draft_cookie_path(
+    os.getenv("DRAFT_COOKIE_PATH", APPROVED_DRAFT_COOKIE_PATH)
+)
+DRAFT_CREATION_COOKIE_NAME = os.getenv("DRAFT_CREATION_COOKIE_NAME", "applyflow_draft_creation")
+DRAFT_COOKIE_SECURE = draft_cookie_secure(
+    APP_ENV, configured=env_bool("DRAFT_COOKIE_SECURE", False)
+)
+DRAFT_INACTIVITY_SECONDS = env_bounded_positive_int(
+    "DRAFT_INACTIVITY_SECONDS",
+    7 * 24 * 60 * 60,
+    minimum=60,
+    maximum=7 * 24 * 60 * 60,
+)
+DRAFT_ABSOLUTE_SECONDS = env_bounded_positive_int(
+    "DRAFT_ABSOLUTE_SECONDS",
+    30 * 24 * 60 * 60,
+    minimum=60,
+    maximum=30 * 24 * 60 * 60,
+)
+if DRAFT_ABSOLUTE_SECONDS < DRAFT_INACTIVITY_SECONDS:
+    raise ImproperlyConfigured(
+        "DRAFT_ABSOLUTE_SECONDS must be greater than or equal to DRAFT_INACTIVITY_SECONDS."
+    )
+DRAFT_CREATION_KEY_LIFETIME_SECONDS = env_bounded_positive_int(
+    "DRAFT_CREATION_KEY_LIFETIME_SECONDS",
+    10 * 60,
+    minimum=30,
+    maximum=15 * 60,
+)
+DRAFT_INACTIVITY_LIFETIME = timedelta(seconds=DRAFT_INACTIVITY_SECONDS)
+DRAFT_ABSOLUTE_LIFETIME = timedelta(seconds=DRAFT_ABSOLUTE_SECONDS)
+DRAFT_CREATION_KEY_LIFETIME = timedelta(seconds=DRAFT_CREATION_KEY_LIFETIME_SECONDS)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
