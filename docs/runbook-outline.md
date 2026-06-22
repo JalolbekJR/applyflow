@@ -1,9 +1,15 @@
 # Runbook Outline
 
-The Phase 1 Nuxt candidate frontend exists with fixture-backed saving, submission, and status
-behavior. This document remains an outline because Django, persistence, private document storage,
-authorization, deployment, and production operations are not implemented. Exact operational
-procedures belong to the Phase 7 packaging and deployment work.
+The Phase 1 Nuxt candidate frontend still uses fixture-backed saving, submission, and status
+behavior. Phase 2 adds the Django backend foundation, DRF configuration, database-backed domain
+models, initial migrations, Django Admin registration, health endpoint, read-only public vacancy
+API, and environment-driven PostgreSQL-ready settings. Local migrations and tests use SQLite;
+PostgreSQL runtime behavior has not been verified.
+
+This remains an outline because candidate authentication and draft authorization, frontend draft
+API integration, submission and private status lookup APIs, CV upload and private object storage,
+deployment, monitoring, backup, and operational procedures are not implemented. Exact operational
+procedures belong to the Phase 6 packaging and deployment work.
 
 ## Purpose
 

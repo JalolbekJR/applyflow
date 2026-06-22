@@ -1,8 +1,8 @@
 # ApplyFlow Development Contract
 
-ApplyFlow is currently in Phase 1: code-first UX validation and the candidate-facing Nuxt frontend
-foundation. Phase 0 product and architecture decisions are accepted. The current frontend uses
-fixtures and simulated services and must not be described as a real recruitment system.
+ApplyFlow is currently in Phase 2: Django backend foundation. Phase 1 delivered the candidate-facing
+Nuxt frontend, which still uses fixtures and simulated services. The backend now provides schema,
+admin, health, and read-only vacancy foundations but is not integrated with the frontend.
 
 ## Before Editing
 
@@ -15,12 +15,13 @@ fixtures and simulated services and must not be described as a real recruitment 
 
 ## Phase Boundary
 
-Phase 1 allows Nuxt 4 frontend source, configuration, tests, fictional fixtures, ignored
-browser-review screenshots, and documentation updates required by frontend behavior.
+Phase 2 allows Django and DRF configuration, PostgreSQL-ready settings, domain models, migrations,
+Django Admin registration, read-only vacancy APIs, backend tests, and directly affected
+documentation.
 
-Do not add Django, DRF, PostgreSQL, migrations, Django Admin, Docker, CI, deployment, or production
-infrastructure during this phase. Figma work remains deferred while the connected plan prevents
-useful canvas operations.
+Do not add candidate authentication, draft authorization workflows, CV upload or storage, frontend
+API integration, Docker, CI, deployment, monitoring, or production infrastructure during this
+phase. Figma work remains deferred while the connected plan prevents useful canvas operations.
 
 ## Development Rules
 

@@ -29,3 +29,10 @@ Admin access is staff-only and least privilege. Public candidate APIs remain sep
 - Configure admin list displays and readonly fields during backend implementation.
 - Add permission tests for status changes and uploaded document access.
 - Document production admin ingress controls before deployment.
+
+## Current Status
+
+Phase 2 registers vacancies, drafts, submitted applications, and document metadata with practical
+list columns, filters, searches, and readonly identifiers. Credential hashes and storage keys are
+excluded. Staff workflow validation, object-level document authorization, and production ingress
+hardening remain unimplemented.

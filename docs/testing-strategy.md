@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Testing is split between the implemented Phase 1 frontend and the planned backend.
+Testing covers the implemented Phase 1 frontend and Phase 2 backend foundation.
 
 ## Current Frontend Checks
 
@@ -39,15 +39,40 @@ npm run test:e2e
 - Mobile semantic and visual vacancy order, footer targets, and 320px reflow.
 - Responsive and affected-state screenshots for human review.
 
-## Planned Backend Tests
+## Current Backend Checks
+
+Run from `backend/` with the virtual environment installed:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+```
+
+Current pytest coverage includes:
+
+- Vacancy UUID, status choices, slug uniqueness, published reads, and unpublished rejection.
+- Separate draft and submitted application records.
+- Submitted-application public-reference and vacancy/normalized-email uniqueness.
+- Draft and status credential hashing and verification.
+- Document owner XOR and active-document uniqueness constraints for each owner type.
+- Safe Django Admin registration with credential hashes and storage keys excluded.
+- Health, read-only vacancy API, unsupported mutation, and JSON error behavior.
+- PostgreSQL URL parsing and secure DRF permission defaults.
+
+## Planned Workflow Tests
 
 - Active and closed vacancy rules.
 - Draft creation, authorization, restoration, expiration, abandonment, and cleanup.
 - Server-side field validation and privacy-safe error mapping.
 - Atomic submission and duplicate protection under concurrency.
 - PDF extension, size, signature, content, malformed input, storage name, and authorization checks.
-- Status secret hashing, non-logging, throttling, and enumeration resistance.
+- Private status lookup authorization, non-logging, throttling, and enumeration resistance.
 - Retention cleanup, staff permissions, and allowed application transitions.
+
+Local Phase 2 validation uses SQLite. PostgreSQL runtime tests remain pending.
 
 ## Test Data Rules
 

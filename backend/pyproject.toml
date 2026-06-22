@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "applyflow-backend"
+version = "0.1.0"
+description = "Django backend foundation for ApplyFlow"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "Django==5.2.15",
+  "djangorestframework==3.17.1",
+  "psycopg[binary]==3.3.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",
+  "pytest-django==4.12.0",
+  "ruff==0.15.18",
+]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

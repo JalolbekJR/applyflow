@@ -85,6 +85,10 @@ Do not show:
 - Documents require explicit object-level staff authorization before storage access.
 - Status lookup requires correct lookup credentials.
 
+These are target controls. Phase 2 includes schema and safe admin/API defaults only. Candidate draft
+authorization, status-secret lookup, and document access are not implemented. The frontend remains
+fixture-backed and must not collect real candidate data.
+
 ## Logging Restrictions
 
 Do not log:

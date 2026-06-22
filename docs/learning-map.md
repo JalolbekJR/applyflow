@@ -20,7 +20,7 @@ operational work. Phase numbers follow the current implementation roadmap.
 | Hydration | File inputs and draft state are browser-dependent. | How mismatches happen. | Trace the fixture control and file input boundaries. | 1 |
 | TypeScript | Service models and form data need stable contracts. | DTOs versus UI state. | Trace the current domain contracts. | 1 |
 | Form state | The application flow is the product core. | Local state, cloning, and validation timing. | Reproduce a validated step transition. | 1 |
-| API integration | Fixture services will be replaced by DRF endpoints. | Mapping server errors to UI errors. | Compare fixture contracts with the planned API. | 3 |
+| API integration | Fixture services will be replaced by DRF endpoints. | Mapping server errors to UI errors. | Compare fixture contracts with the implemented read API. | 3 |
 | Accessibility | The flow must be keyboard-completable. | Labels, focus, error summary, reduced motion. | Complete a step using keyboard only. | 1 |
 | Testing | Prevents regressions in the main flow. | Unit vs component vs end-to-end tests. | Trace a validation test and Playwright flow. | 1 |
 
@@ -28,21 +28,21 @@ operational work. Phase numbers follow the current implementation roadmap.
 
 | Topic | Why It Matters In ApplyFlow | Be Able To Explain | Reproduce Manually | Phase |
 | --- | --- | --- | --- | --- |
-| Django project structure | Keeps apps and settings understandable. | Project package vs app responsibilities. | Create vacancies/applications/documents apps. | 3 |
-| Models | Vacancies, drafts, applications, documents need persistence. | Fields, constraints, indexes. | Model a vacancy and application draft. | 3 |
-| Migrations | Schema changes must be reviewable. | Migration discipline and rollback thinking. | Create and inspect a migration. | 3 |
-| Serializers | DRF validates and shapes API data. | Serializer validation vs model constraints. | Build a draft update serializer. | 3 |
-| ViewSets/views | HTTP layer maps requests to services. | Why views stay thin. | Create a vacancy detail endpoint. | 3 |
-| Permissions | Protect drafts, documents, and admin behavior. | Object-level authorization. | Test cross-draft access denial. | 4 |
-| Authentication | Admin users and anonymous candidates differ. | Session auth, anonymous flow, and cookies. | Configure admin login separately. | 3 |
-| CSRF | Same-origin unsafe methods need protection. | How CSRF differs from CORS. | Explain settings for local vs production. | 3 |
-| Throttling | Status lookup and uploads need abuse limits. | Why throttling is not authorization. | Add a scoped throttle test. | 5 |
-| PostgreSQL constraints | Duplicate submissions need database enforcement. | Unique constraints and indexes. | Add unique rule for vacancy/email. | 5 |
-| Transactions | Submission must be atomic. | What rolls back on failure. | Submit draft and document in one transaction. | 5 |
-| File storage | CV upload is private and hostile input. | Storage key, metadata, safe download. | Save a document with generated name. | 4 |
-| Testing | Backend rules must not rely on manual checks. | pytest fixtures, database tests, negative tests. | Write upload rejection tests. | 4 |
-| Docker | Local and production environments need repeatability later. | Image, container, service, volume. | Build and inspect backend packaging. | 7 |
-| CI/CD | Checks should run before merge. | Workflow jobs and required checks. | Add and inspect the required workflows. | 7 |
+| Django project structure | Keeps apps and settings understandable. | Project package vs app responsibilities. | Trace vacancies/applications/documents apps. | 2 |
+| Models | Vacancies, drafts, applications, documents need persistence. | Fields, constraints, indexes. | Inspect the foundation schema. | 2 |
+| Migrations | Schema changes must be reviewable. | Migration discipline and rollback thinking. | Apply and reverse the initial migrations. | 2 |
+| Serializers | DRF validates and shapes API data. | Serializer validation vs model constraints. | Inspect the read-only vacancy serializer. | 2 |
+| ViewSets/views | HTTP layers map requests to narrow behavior. | Why views stay thin. | Trace health and vacancy endpoints. | 2 |
+| Permissions | Protect drafts, documents, and admin behavior. | Object-level authorization. | Test cross-draft access denial. | 3 |
+| Authentication | Admin users and anonymous candidates differ. | Session auth, anonymous flow, and cookies. | Design candidate credential handling. | 3 |
+| CSRF | Same-origin unsafe methods need protection. | How CSRF differs from CORS. | Define settings for integrated mutations. | 3 |
+| Throttling | Status lookup and uploads need abuse limits. | Why throttling is not authorization. | Add a scoped throttle test. | 4 |
+| PostgreSQL constraints | Duplicate submissions need database enforcement. | Unique constraints and indexes. | Verify the vacancy/email rule on PostgreSQL. | 4 |
+| Transactions | Submission must be atomic. | What rolls back on failure. | Submit draft and metadata in one transaction. | 4 |
+| File storage | CV upload is private and hostile input. | Storage key, metadata, safe download. | Implement authorized private storage. | 3 |
+| Testing | Backend rules must not rely on manual checks. | pytest fixtures, database tests, negative tests. | Extend the current backend suite. | 2 |
+| Docker | Local and production environments need repeatability later. | Image, container, service, volume. | Build and inspect backend packaging. | 6 |
+| CI/CD | Checks should run before merge. | Workflow jobs and required checks. | Add and inspect the required workflows. | 6 |
 
 ## UX
 

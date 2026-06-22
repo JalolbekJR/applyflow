@@ -1,7 +1,7 @@
 # CI Plan
 
 The Phase 1 frontend has local formatting, lint, type, unit, build, and Playwright commands. CI and
-GitHub Actions workflows are not implemented and remain Phase 7 work.
+GitHub Actions workflows are not implemented and remain Phase 6 work.
 
 Reference: [GitHub Actions documentation](https://docs.github.com/actions).
 
@@ -63,5 +63,5 @@ Recommended later:
 
 ## Deployment
 
-Deployment automation is deferred to Phase 7. When deployment starts, use staging before
+Deployment automation is deferred to Phase 6. When deployment starts, use staging before
 production and document rollback.
