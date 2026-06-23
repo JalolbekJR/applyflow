@@ -10,12 +10,15 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 from config.settings import (
+    APPROVED_DOCUMENT_MAX_UPLOAD_BYTES,
     APPROVED_DRAFT_COOKIE_PATH,
     DEFAULT_DOCUMENT_PRIVATE_ROOT,
+    DOCUMENT_MAX_UPLOAD_BYTES_ERROR,
     DOCUMENT_PRIVATE_ROOT_ERROR,
     DOCUMENT_STORAGE_BACKEND_ERROR,
     database_config,
     draft_cookie_secure,
+    validate_document_max_upload_bytes,
     validate_document_private_root,
 )
 
@@ -29,6 +32,7 @@ PROBE_ENV_NAMES = (
     "DRAFT_CREATION_COOKIE_NAME",
     "DRAFT_CREATION_KEY_LIFETIME_SECONDS",
     "DOCUMENT_STORAGE_BACKEND",
+    "DOCUMENT_MAX_UPLOAD_BYTES",
     "DOCUMENT_PRIVATE_ROOT",
 )
 PROBE_CODE = """
@@ -48,6 +52,7 @@ print(
                 s.DRAFT_CREATION_KEY_LIFETIME.total_seconds()
             ),
             "document_storage_backend": s.DOCUMENT_STORAGE_BACKEND,
+            "document_max_upload_bytes": s.DOCUMENT_MAX_UPLOAD_BYTES,
             "document_private_root": str(s.DOCUMENT_PRIVATE_ROOT),
             "document_private_root_exists": s.DOCUMENT_PRIVATE_ROOT.exists(),
         }
@@ -126,7 +131,38 @@ def test_draft_settings_use_approved_defaults_and_only_allow_local_insecure_cook
 
 def test_document_storage_settings_use_safe_development_defaults():
     assert settings.DOCUMENT_STORAGE_BACKEND == "local_private"
+    assert settings.DOCUMENT_MAX_UPLOAD_BYTES == APPROVED_DOCUMENT_MAX_UPLOAD_BYTES
     assert settings.DOCUMENT_PRIVATE_ROOT == DEFAULT_DOCUMENT_PRIVATE_ROOT.resolve(strict=False)
+
+
+def test_document_max_upload_bytes_accepts_only_the_approved_value():
+    assert validate_document_max_upload_bytes(None) == APPROVED_DOCUMENT_MAX_UPLOAD_BYTES
+    assert (
+        validate_document_max_upload_bytes(str(APPROVED_DOCUMENT_MAX_UPLOAD_BYTES))
+        == APPROVED_DOCUMENT_MAX_UPLOAD_BYTES
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "5242879",
+        "5242881",
+        "+5242880",
+        " 5242880",
+        "5242880 ",
+        "5_242_880",
+        "5.24288e6",
+        "５２４２８８０",
+        "",
+        OVERSIZED_DIGIT_STRING,
+    ],
+)
+def test_invalid_document_max_upload_bytes_fail_during_settings_load(value):
+    result = run_settings_probe(DOCUMENT_MAX_UPLOAD_BYTES=value)
+
+    assert_settings_load_failed(result, DOCUMENT_MAX_UPLOAD_BYTES_ERROR)
+    assert_raw_input_not_echoed(result.stderr, "DOCUMENT_MAX_UPLOAD_BYTES", value)
 
 
 def run_settings_probe(**overrides):

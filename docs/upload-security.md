@@ -4,7 +4,7 @@ CV upload is security-sensitive. A CV file contains personal data and may also c
 
 Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html).
 
-## Planned Controls
+## Implemented Slice 5 Validator Controls
 
 - Strict maximum file size: 5 MiB (`5,242,880` bytes); future proxy request ceiling 6 MiB for
   multipart overhead.
@@ -32,6 +32,11 @@ Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/ch
 - SHA-256 integrity metadata that is never returned or logged.
 - Privacy-safe logs.
 - Safe error responses.
+
+Slice 5 pins `pypdf==6.14.1` after reviewing the exact release metadata. The base wheel is
+BSD-3-Clause, supports Python 3.11 through `Requires-Python: >=3.9`, and has no runtime dependency
+on Python 3.11 when installed without extras. Do not install `pypdf[crypto]`, `pypdf[full]`,
+image, font, OCR, rendering, antivirus, or external-binary packages for this validator.
 
 ## Storage Naming
 
@@ -66,11 +71,10 @@ candidate data.
    every rejected or failed operation.
 9. Persist metadata. Compensate by deleting the object if persistence fails.
 
-No PDF parser exists in the current backend dependencies. `pypdf` is the initial candidate, but a
-specific pinned version, license, maintenance status, security history, and resource behaviour must
-be reviewed and approved before dependency files change or installation occurs. Implementation must
-use `PdfReader(..., strict=True)`, catch parser failures, and return only generic validation
-errors.
+The Slice 5 backend includes a standalone validation service and no upload endpoint. It uses
+`PdfReader(..., strict=True)`, rejects encrypted PDFs instead of decrypting them, catches expected
+parser failures, returns only generic validation errors, and never extracts text, images, fonts,
+attachments, XMP, or rendered content.
 
 ## Error Responses
 
@@ -86,10 +90,15 @@ Examples:
 
 Malware scanning is not part of the first local prototype unless explicitly implemented later. The project must not claim antivirus scanning exists before it does.
 
-Slice 4 does not add PDF parsing, file-type validation, upload endpoints, document metadata
-mutation, cleanup commands, or malware scanning. Authoritative upload-size enforcement remains a
-Slice 5 responsibility; the storage layer only guarantees bounded chunked copying and private key
-handling.
+Slice 5 adds PDF parsing, file-type validation, filename display normalization, SHA-256 calculation,
+and bounded private temporary-file validation only. It does not add upload endpoints, document
+metadata mutation, cleanup commands, or malware scanning. The storage layer still only guarantees
+bounded chunked copying and private key handling.
+
+The Slice 5 validator runs in process. Its size, page-count, strict parsing, object traversal, and
+temporary-file limits reduce risk from hostile input, but they are not a sandbox and do not
+guarantee protection from unknown parser vulnerabilities. Production hardening may later add
+process or operating-system isolation after a separate review.
 
 ## Deferred File Types
 

@@ -117,6 +117,7 @@ Current pytest coverage includes:
 | Checksum | SHA-256 matches stored bytes but never appears in API output or logs. |
 | Storage key boundary | Implemented in Slice 4: canonical `drafts/{draft_uuid}/{document_uuid}.pdf` keys reject traversal, alternate separators, control characters, non-canonical UUIDs, unexpected extensions, and temporary-name collisions before storage access. |
 | Private adapter contract | Implemented in Slice 4: local and fake adapters share save/open/delete/exists/enumeration behavior, duplicate saves never overwrite, failed writes clean temporary files, and enumeration returns stable relative keys only. |
+| Validation service boundary | Implemented in Slice 5: validates bytes or binary streams and returns safe metadata only; no endpoint, storage write, database write, URL, or download route is introduced. |
 | Initial storage failure | No active metadata; form answers preserved; safe retry response. |
 | Metadata failure after save | Compensating delete runs; failed compensation becomes orphan-cleanup evidence. |
 | Replacement success | Old document stays active until new validation/storage succeeds; transaction activates only the new metadata; old blob becomes cleanup-eligible. |

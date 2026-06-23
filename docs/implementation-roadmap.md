@@ -144,7 +144,7 @@ names the preferred model for implementation support, not permission to begin wo
 | 2. Draft API | Create/resolve/read, candidate and experience-summary PATCH, API error/request-ID integration, no-store responses. | Slice 1. | GPT-5.5 | High; every endpoint must preserve enumeration-safe authorization. | API matrix, stale-version conflicts, validation mapping, unsupported methods, lint/format/tests. |
 | 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, and parent-version increments. Frontend integration remains part of Slice 7. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests when integration begins. |
 | 4. Private storage abstraction | Complete: provider-neutral interface, private local adapter, ignored root, fake/test adapter, canonical key generation, and configuration validation. No upload endpoint or document download was added. | Slice 1. | GPT-5.5 | High; storage-path and privacy boundaries must be exact. | Traversal/key tests, no public route, adapter contract tests, configuration checks. |
-| 5. Upload validation | Size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, and strict `pypdf` validation. | Slice 4 and the approved parser family, with the exact reviewed version pinned before code changes. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
+| 5. Upload validation | Complete: size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, strict `pypdf==6.14.1` validation, and no endpoint/storage/DB write. | Slice 4 and the reviewed base parser package. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
 | 6. Document mutation API | Singleton CV create/read/replace/delete, compensation, row locks, active uniqueness, and retryable deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, race/conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests. |
 | 7. Frontend integration | Real draft service/composable, browser-only bootstrap, 800 ms autosave, route refresh, conflict/expiry UI, experience CRUD, XHR upload progress/retry/cancel/replace/delete. | Stable API from slices 2, 3, and 6. | GPT-5.4 for primary work; GPT-5.5 for conflict/security review. | High; state recovery and accessibility cross multiple routes. | Format, lint, typecheck, Vitest, build, Playwright candidate flow, responsive/reduced-motion/manual screen-reader spot checks. |
 | 8. Cleanup | Idempotent dry-run/batched management command, revoke/scrub, pending blob deletion, stale-orphan grace period, aggregate logs. | Slices 1, 4, and 6. | GPT-5.5 | High; deletion failures must not leak data or lose cleanup keys. | Dry-run/apply tests, repeated-run tests, storage-failure retries, cleanup eligibility, privacy-log assertions. |
@@ -157,8 +157,8 @@ names the preferred model for implementation support, not permission to begin wo
    approved before exposing mutation views.
 2. **Schema gate:** migrations, field privacy, constraints, and rollback SQL are reviewed before any
    migration is applied.
-3. **Dependency gate:** the exact `pypdf` release, license, maintenance, security history, and
-   resource behavior are reviewed before dependency files change or installation occurs.
+3. **Dependency gate:** the exact `pypdf==6.14.1` base release, license, Python compatibility, and
+   dependency graph were reviewed before parser code. Future parser upgrades repeat this gate.
 4. **Storage gate:** Slice 4 now covers private-root isolation, generated keys, duplicate-save
    protection, failure cleanup, strict configuration, and no public URL capability. Replacement
    compensation and retryable physical deletion remain part of later document mutation and cleanup
@@ -201,7 +201,7 @@ names the preferred model for implementation support, not permission to begin wo
 
 The plan is approved at the architecture level. Implementation still must:
 
-1. Review and pin the exact `pypdf` release before any dependency or parser code changes.
+1. Repeat the dependency gate before changing the pinned `pypdf` release or adding parser extras.
 2. Keep `sha256` nullable in the first migration while enforcing checksums for every new accepted
    Phase 3 upload in the service layer.
 3. Treat PostgreSQL row-lock, concurrency, conditional-constraint, and replacement tests as a

@@ -10,9 +10,11 @@ REPOSITORY_ROOT = BASE_DIR.parent
 APPROVED_DRAFT_COOKIE_PATH = "/api/v1/application-drafts/"
 DRAFT_COOKIE_PATH_ERROR = "DRAFT_COOKIE_PATH must match the approved application drafts path."
 DOCUMENT_STORAGE_BACKENDS = {"local_private"}
+APPROVED_DOCUMENT_MAX_UPLOAD_BYTES = 5_242_880
 DEFAULT_DOCUMENT_PRIVATE_ROOT = BASE_DIR / ".private-documents"
 DOCUMENT_STORAGE_BACKEND_ERROR = "DOCUMENT_STORAGE_BACKEND must be exactly one of: local_private."
 DOCUMENT_PRIVATE_ROOT_ERROR = "DOCUMENT_PRIVATE_ROOT must be an absolute private directory path."
+DOCUMENT_MAX_UPLOAD_BYTES_ERROR = "DOCUMENT_MAX_UPLOAD_BYTES must be exactly 5242880."
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -71,6 +73,18 @@ def validate_document_storage_backend(value: object) -> str:
     if not isinstance(value, str) or value not in DOCUMENT_STORAGE_BACKENDS:
         raise ImproperlyConfigured(DOCUMENT_STORAGE_BACKEND_ERROR)
     return value
+
+
+def validate_document_max_upload_bytes(value: object | None) -> int:
+    if value is None:
+        return APPROVED_DOCUMENT_MAX_UPLOAD_BYTES
+    if not isinstance(value, str):
+        raise ImproperlyConfigured(DOCUMENT_MAX_UPLOAD_BYTES_ERROR)
+    if not value.isascii() or not value.isdigit():
+        raise ImproperlyConfigured(DOCUMENT_MAX_UPLOAD_BYTES_ERROR)
+    if value != str(APPROVED_DOCUMENT_MAX_UPLOAD_BYTES):
+        raise ImproperlyConfigured(DOCUMENT_MAX_UPLOAD_BYTES_ERROR)
+    return APPROVED_DOCUMENT_MAX_UPLOAD_BYTES
 
 
 def validate_document_private_root(value: object | None, *, app_env: str) -> Path:
@@ -260,6 +274,9 @@ DRAFT_CREATION_KEY_LIFETIME = timedelta(seconds=DRAFT_CREATION_KEY_LIFETIME_SECO
 
 DOCUMENT_STORAGE_BACKEND = validate_document_storage_backend(
     os.getenv("DOCUMENT_STORAGE_BACKEND", "local_private")
+)
+DOCUMENT_MAX_UPLOAD_BYTES = validate_document_max_upload_bytes(
+    os.getenv("DOCUMENT_MAX_UPLOAD_BYTES")
 )
 DOCUMENT_PRIVATE_ROOT = validate_document_private_root(
     os.getenv("DOCUMENT_PRIVATE_ROOT"),
