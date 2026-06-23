@@ -1,4 +1,5 @@
 import base64
+import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -68,6 +69,28 @@ def assert_error(response, status, code):
     assert payload["error"]["code"] == code
     assert payload["error"]["fields"] == {}
     assert payload["error"]["request_id"].startswith("req_")
+    assert response["X-Request-ID"] == payload["error"]["request_id"]
+    assert response["Cache-Control"] == "no-store"
+
+
+def assert_validation_error(response, *fields):
+    assert response.status_code == 422
+    payload = response.json()["error"]
+    assert payload["code"] == "validation_error"
+    assert payload["message"] == "Check the highlighted fields."
+    assert set(payload["fields"]) == set(fields)
+    assert response["Cache-Control"] == "no-store"
+    assert response["X-Request-ID"] == payload["request_id"]
+
+
+def patch_draft(client, draft_id, section, payload, token, *, version=1):
+    return client.patch(
+        f"/api/v1/application-drafts/{draft_id}/{section}/",
+        payload,
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH=f'"draft-{version}"',
+    )
 
 
 @pytest.mark.django_db
@@ -594,3 +617,655 @@ def test_abandonment_without_csrf_is_rejected_before_mutation(vacancy):
     assert_error(response, 403, "csrf_failed")
     draft.refresh_from_db()
     assert draft.status == draft.Status.ACTIVE
+
+
+@pytest.mark.django_db
+def test_candidate_patch_partially_updates_and_returns_complete_aggregate(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft_id = created.json()["draft"]["id"]
+
+    response = patch_draft(
+        client,
+        draft_id,
+        "candidate",
+        {"full_name": "  Zoë Example  "},
+        token,
+    )
+
+    assert response.status_code == 200
+    assert response["ETag"] == '"draft-2"'
+    assert response["Cache-Control"] == "no-store"
+    assert response.json()["draft"]["candidate"] == {
+        "full_name": "Zoë Example",
+        "email": "",
+        "phone": "",
+        "portfolio_url": "",
+        "preferred_contact_method": "",
+    }
+
+
+@pytest.mark.django_db
+def test_experience_patch_normalizes_skills_and_preserves_first_seen_order(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft_id = created.json()["draft"]["id"]
+
+    response = patch_draft(
+        client,
+        draft_id,
+        "experience",
+        {"skills": ["  Vue 3 ", "TypeScript", "vue 3", "Доступность"]},
+        token,
+    )
+
+    assert response.status_code == 200
+    assert response["ETag"] == '"draft-2"'
+    assert response.json()["draft"]["experience"]["skills"] == [
+        "Vue 3",
+        "TypeScript",
+        "Доступность",
+    ]
+
+
+@pytest.mark.django_db
+def test_candidate_patch_updates_email_normalization_and_omits_private_field(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft_id = created.json()["draft"]["id"]
+
+    response = patch_draft(
+        client,
+        draft_id,
+        "candidate",
+        {
+            "email": "  FICTIONAL.CANDIDATE@EXAMPLE.TEST  ",
+            "phone": "+998 (90) 123-45-67",
+            "preferred_contact_method": "phone",
+            "portfolio_url": "http://portfolio.example.test/profile",
+        },
+        token,
+    )
+
+    assert response.status_code == 200
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    assert draft.email == "FICTIONAL.CANDIDATE@EXAMPLE.TEST"
+    assert draft.email_normalized == "fictional.candidate@example.test"
+    assert "email_normalized" not in response.content.decode()
+    assert response.json()["draft"]["candidate"]["full_name"] == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [({}, "non_field_errors"), ({"unexpected": "value"}, "unexpected"), ([], "non_field_errors")],
+)
+def test_patch_requires_nonempty_json_object_with_known_fields(vacancy, section, payload, field):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    response = client.patch(
+        f"/api/v1/application-drafts/{draft.pk}/{section}/",
+        data=json.dumps(payload),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_validation_error(response, field)
+    draft.refresh_from_db()
+    assert draft.version == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"full_name": None}, "full_name"),
+        ({"full_name": "x" * 201}, "full_name"),
+        ({"full_name": "Fictional\x00 Name"}, "full_name"),
+        ({"email": "not-an-email"}, "email"),
+        ({"email": None}, "email"),
+        ({"phone": "letters-only"}, "phone"),
+        ({"portfolio_url": "ftp://example.test/profile"}, "portfolio_url"),
+        ({"portfolio_url": "not a url"}, "portfolio_url"),
+        ({"portfolio_url": "https://example.test/\nheader"}, "portfolio_url"),
+        ({"preferred_contact_method": "postal"}, "preferred_contact_method"),
+        ({"preferred_contact_method": "phone"}, "phone"),
+    ],
+)
+def test_candidate_patch_rejects_invalid_fields_without_writing(vacancy, payload, field):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    original = (draft.full_name, draft.email, draft.phone, draft.version, draft.last_activity_at)
+
+    response = patch_draft(client, draft.pk, "candidate", payload, token)
+
+    assert_validation_error(response, field)
+    assert "applyflow_draft" not in response.cookies
+    draft.refresh_from_db()
+    assert (
+        draft.full_name,
+        draft.email,
+        draft.phone,
+        draft.version,
+        draft.last_activity_at,
+    ) == original
+
+
+@pytest.mark.django_db
+def test_candidate_phone_preference_uses_merged_state_atomically(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    accepted = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"phone": "+44 20 7946 0958", "preferred_contact_method": "phone"},
+        token,
+    )
+    rejected = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"phone": ""},
+        token,
+        version=2,
+    )
+
+    assert accepted.status_code == 200
+    assert_validation_error(rejected, "phone")
+    draft.refresh_from_db()
+    assert draft.phone == "+44 20 7946 0958"
+    assert draft.preferred_contact_method == "phone"
+    assert draft.version == 2
+
+
+@pytest.mark.django_db
+def test_candidate_patch_accepts_documented_boundaries(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    long_url = "https://example.test/" + ("a" * (500 - len("https://example.test/")))
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {
+            "full_name": "名" * 200,
+            "phone": "+" + ("1" * 29),
+            "portfolio_url": long_url,
+        },
+        token,
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", ["", "early_career", "mid_level", "senior"])
+def test_experience_patch_accepts_approved_levels_and_clearing(vacancy, value):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    response = patch_draft(client, draft.pk, "experience", {"experience_level": value}, token)
+
+    assert response.status_code == 200
+    assert response.json()["draft"]["experience"]["experience_level"] == value
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"experience_level": "expert"}, "experience_level"),
+        ({"skills": "Python"}, "skills"),
+        ({"skills": ["valid", 7]}, "skills"),
+        ({"skills": ["  "]}, "skills"),
+        ({"skills": ["x" * 81]}, "skills"),
+        ({"skills": ["safe\x00value"]}, "skills"),
+        ({"skills": [str(index) for index in range(13)]}, "skills"),
+        ({"optional_message": "x" * 1201}, "optional_message"),
+        ({"optional_message": "unsafe\x00message"}, "optional_message"),
+        ({"consent_version": "x" * 65}, "consent_version"),
+        ({"consent_version": "unsafe\nversion"}, "consent_version"),
+    ],
+)
+def test_experience_patch_rejects_invalid_fields_without_writing(vacancy, payload, field):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    original = (draft.skills, draft.optional_message, draft.version, draft.last_activity_at)
+
+    response = patch_draft(client, draft.pk, "experience", payload, token)
+
+    assert_validation_error(response, field)
+    assert "applyflow_draft" not in response.cookies
+    draft.refresh_from_db()
+    assert (draft.skills, draft.optional_message, draft.version, draft.last_activity_at) == original
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", [1, 0, "true", "false", None])
+def test_consent_acknowledgement_requires_real_json_boolean(vacancy, value):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        "experience",
+        {"consent_acknowledged": value},
+        token,
+    )
+
+    assert_validation_error(response, "consent_acknowledged")
+
+
+@pytest.mark.django_db
+def test_experience_patch_supports_clearing_and_text_boundaries(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    first = patch_draft(
+        client,
+        draft.pk,
+        "experience",
+        {
+            "skills": ["x" * 80, "アクセシビリティ"],
+            "optional_message": "Line one\nLine two" + ("x" * (1200 - 17)),
+            "consent_acknowledged": True,
+            "consent_version": "privacy-v1",
+        },
+        token,
+    )
+    cleared = patch_draft(
+        client,
+        draft.pk,
+        "experience",
+        {"skills": [], "optional_message": "", "experience_level": ""},
+        token,
+        version=2,
+    )
+
+    assert first.status_code == 200
+    assert cleared.status_code == 200
+    assert cleared.json()["draft"]["experience"]["skills"] == []
+    assert cleared.json()["draft"]["experience"]["optional_message"] == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+def test_patch_requires_csrf_and_rejects_unsupported_methods(vacancy, section):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    path = f"/api/v1/application-drafts/{draft.pk}/{section}/"
+
+    csrf_failure = client.patch(
+        path,
+        {"full_name": "Fictional"} if section == "candidate" else {"skills": []},
+        content_type="application/json",
+        HTTP_IF_MATCH='"draft-1"',
+    )
+    assert_error(csrf_failure, 403, "csrf_failed")
+    for method in ("get", "post", "put", "delete"):
+        response = getattr(client, method)(path, HTTP_X_CSRFTOKEN=token)
+        assert response.status_code == 405
+        assert response["Cache-Control"] == "no-store"
+        payload = response.json()["error"]
+        assert response["X-Request-ID"] == payload["request_id"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+def test_patch_requires_current_ownership_and_version(vacancy, section):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    payload = {"full_name": "Fictional"} if section == "candidate" else {"skills": []}
+    path = f"/api/v1/application-drafts/{draft.pk}/{section}/"
+
+    missing_version = client.patch(
+        path,
+        payload,
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    malformed_version = client.patch(
+        path,
+        payload,
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH="draft-1",
+    )
+    stale_version = patch_draft(client, draft.pk, section, payload, token, version=2)
+    client.cookies.pop("applyflow_draft")
+    missing_ownership = patch_draft(client, draft.pk, section, payload, token)
+
+    assert_error(missing_version, 428, "draft_version_required")
+    assert_error(malformed_version, 428, "draft_version_required")
+    assert_error(stale_version, 409, "draft_conflict")
+    assert_error(missing_ownership, 404, "draft_unavailable")
+    draft.refresh_from_db()
+    assert draft.version == 1
+
+
+@pytest.mark.django_db
+def test_cross_draft_patch_is_generic_and_changes_neither_draft(vacancy, another_vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    first = apps.get_model("applications.ApplicationDraft").objects.get()
+    second = apps.get_model("applications.ApplicationDraft")(
+        vacancy=another_vacancy,
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+    second_credential = generate_credential(second)
+    second.save()
+    client.cookies["applyflow_draft"] = second_credential
+
+    response = patch_draft(
+        client,
+        first.pk,
+        "candidate",
+        {"full_name": "Must Not Persist"},
+        token,
+    )
+
+    assert_error(response, 404, "draft_unavailable")
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.full_name == second.full_name == ""
+    assert first.version == second.version == 1
+
+
+@pytest.mark.django_db
+@override_settings(DRAFT_COOKIE_SECURE=True)
+def test_successful_patch_renews_lifecycle_and_same_verified_cookie_only(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    credential = created.cookies["applyflow_draft"].value
+    original_activity = draft.last_activity_at
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"full_name": "Avery Example"},
+        token,
+    )
+
+    draft.refresh_from_db()
+    cookie = response.cookies["applyflow_draft"]
+    assert response.status_code == 200
+    assert cookie.value == credential
+    assert cookie["httponly"] is True
+    assert cookie["secure"] is True
+    assert cookie["samesite"] == "Lax"
+    assert cookie["path"] == "/api/v1/application-drafts/"
+    assert not cookie["domain"]
+    assert draft.version == 2
+    assert draft.last_activity_at > original_activity
+    assert draft.expires_at == draft.effective_expiry_at()
+
+
+@pytest.mark.django_db
+def test_duplicate_cookie_patch_renews_only_uniquely_verified_credential(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    credential = created.cookies["applyflow_draft"].value
+    csrf_cookie = client.cookies["csrftoken"].value
+
+    response = client.patch(
+        f"/api/v1/application-drafts/{draft.pk}/experience/",
+        {"skills": ["Python"]},
+        content_type="application/json",
+        HTTP_COOKIE=(
+            f"csrftoken={csrf_cookie}; applyflow_draft=invalid; applyflow_draft={credential}"
+        ),
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert response.status_code == 200
+    assert response.cookies["applyflow_draft"].value == credential
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+def test_patch_accepts_json_only(vacancy, section):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    payload = {"full_name": "Fictional Candidate"} if section == "candidate" else {"skills": []}
+
+    response = client.patch(
+        f"/api/v1/application-drafts/{draft.pk}/{section}/",
+        payload,
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert response.status_code == 415
+    assert response["Cache-Control"] == "no-store"
+    assert response["X-Request-ID"] == response.json()["error"]["request_id"]
+    draft.refresh_from_db()
+    assert draft.full_name == ""
+    assert draft.skills == []
+    assert draft.version == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+@pytest.mark.parametrize(
+    "unavailable",
+    ["malformed", "wrong", "revoked", "expired", "abandoned", "submitted"],
+)
+def test_patch_unavailable_credentials_are_generic_and_do_not_write(vacancy, section, unavailable):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    payload = (
+        {"full_name": "Must Not Persist"}
+        if section == "candidate"
+        else {"skills": ["PrivateSkill"]}
+    )
+    if unavailable == "malformed":
+        client.cookies["applyflow_draft"] = "malformed"
+    elif unavailable == "wrong":
+        client.cookies["applyflow_draft"] = f"v1.{draft.pk}.{'a' * 43}"
+    elif unavailable == "revoked":
+        draft.credential_revoked_at = timezone.now()
+        draft.save(update_fields=["credential_revoked_at"])
+    elif unavailable == "expired":
+        draft.expires_at = timezone.now() - timedelta(seconds=1)
+        draft.save(update_fields=["expires_at"])
+    elif unavailable == "abandoned":
+        draft.status = draft.Status.ABANDONED
+        draft.save(update_fields=["status"])
+    else:
+        draft.status = draft.Status.SUBMITTED
+        draft.submitted_at = timezone.now()
+        draft.save(update_fields=["status", "submitted_at"])
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        section,
+        payload,
+        token,
+    )
+
+    assert_error(response, 404, "draft_unavailable")
+    assert int(response.cookies["applyflow_draft"]["max-age"]) == 0
+    draft.refresh_from_db()
+    assert draft.full_name == ""
+    assert draft.skills == []
+    assert draft.version == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+def test_two_valid_patch_credentials_are_ambiguous_and_authorize_neither(
+    vacancy, another_vacancy, section
+):
+    client, token = csrf_client()
+    first_response = create_draft(client, vacancy, token)
+    first = apps.get_model("applications.ApplicationDraft").objects.get()
+    first_credential = first_response.cookies["applyflow_draft"].value
+    second = apps.get_model("applications.ApplicationDraft")(
+        vacancy=another_vacancy,
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+    second_credential = generate_credential(second)
+    second.save()
+    csrf_cookie = client.cookies["csrftoken"].value
+
+    response = client.patch(
+        f"/api/v1/application-drafts/{first.pk}/{section}/",
+        {"full_name": "Must Not Persist"}
+        if section == "candidate"
+        else {"skills": ["PrivateSkill"]},
+        content_type="application/json",
+        HTTP_COOKIE=(
+            f"csrftoken={csrf_cookie}; applyflow_draft={first_credential}; "
+            f"applyflow_draft={second_credential}"
+        ),
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_error(response, 404, "draft_unavailable")
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.full_name == second.full_name == ""
+    assert first.skills == second.skills == []
+    assert first.version == second.version == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("section", ["candidate", "experience"])
+def test_excessive_patch_ownership_cookies_fail_generically(vacancy, section):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    credential = created.cookies["applyflow_draft"].value
+    csrf_cookie = client.cookies["csrftoken"].value
+    raw_cookie = (
+        f"csrftoken={csrf_cookie}; applyflow_draft={credential}; "
+        "applyflow_draft=x; applyflow_draft=x; applyflow_draft=x; applyflow_draft=x"
+    )
+
+    response = client.patch(
+        f"/api/v1/application-drafts/{draft.pk}/{section}/",
+        {"full_name": "Must Not Persist"}
+        if section == "candidate"
+        else {"skills": ["PrivateSkill"]},
+        content_type="application/json",
+        HTTP_COOKIE=raw_cookie,
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_error(response, 404, "draft_unavailable")
+    assert credential not in response.content.decode()
+    draft.refresh_from_db()
+    assert draft.full_name == ""
+    assert draft.skills == []
+    assert draft.version == 1
+
+
+@pytest.mark.django_db
+def test_successful_patch_logs_exclude_candidate_and_experience_values(vacancy, caplog):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    candidate_value = "Private Fictional Candidate"
+    experience_value = "PrivateSkillValue"
+
+    candidate_response = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"full_name": candidate_value},
+        token,
+    )
+    experience_response = patch_draft(
+        client,
+        draft.pk,
+        "experience",
+        {"skills": [experience_value], "optional_message": "Private message value"},
+        token,
+        version=2,
+    )
+
+    assert candidate_response.status_code == 200
+    assert experience_response.status_code == 200
+    assert candidate_value not in caplog.text
+    assert experience_value not in caplog.text
+    assert "Private message value" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_patch_failure_responses_and_logs_exclude_candidate_values(vacancy, caplog):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    private_value = "private-fictional-value@@example.test"
+
+    validation_error = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"email": private_value},
+        token,
+    )
+    stale_conflict = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"full_name": "Private Stale Name"},
+        token,
+        version=2,
+    )
+    client.cookies.pop("applyflow_draft")
+    authorization_failure = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {"full_name": "Private Authorization Name"},
+        token,
+    )
+    csrf_failure = client.patch(
+        f"/api/v1/application-drafts/{draft.pk}/candidate/",
+        {"full_name": "Private CSRF Name"},
+        content_type="application/json",
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_validation_error(validation_error, "email")
+    assert_error(stale_conflict, 409, "draft_conflict")
+    assert_error(authorization_failure, 404, "draft_unavailable")
+    assert_error(csrf_failure, 403, "csrf_failed")
+    for value in (
+        private_value,
+        "Private Stale Name",
+        "Private Authorization Name",
+        "Private CSRF Name",
+    ):
+        assert value not in validation_error.content.decode()
+        assert value not in stale_conflict.content.decode()
+        assert value not in authorization_failure.content.decode()
+        assert value not in csrf_failure.content.decode()
+        assert value not in caplog.text

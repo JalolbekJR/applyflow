@@ -21,7 +21,7 @@ from .drafts import (
     set_ownership_cookie,
 )
 from .models import ApplicationDraft
-from .serializers import public_draft
+from .serializers import CandidatePatchSerializer, ExperiencePatchSerializer, public_draft
 
 
 def no_store(response):
@@ -54,6 +54,10 @@ def clear_unavailable_response():
 class DraftAPIView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        return no_store(response)
 
 
 class ActiveDraftView(DraftAPIView):
@@ -174,3 +178,60 @@ class DraftDetailView(DraftAPIView):
         response["ETag"] = draft_etag(draft)
         clear_ownership_cookie(response)
         return response
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class DraftSectionPatchView(DraftAPIView):
+    serializer_class = None
+
+    def patch(self, request, draft_id):
+        with transaction.atomic():
+            try:
+                draft, credential = resolve_request_draft(
+                    request,
+                    required=True,
+                    queryset=ApplicationDraft.objects.select_for_update(
+                        of=("self",)
+                    ).select_related("vacancy"),
+                    include_credential=True,
+                )
+            except CredentialError:
+                return clear_unavailable_response()
+            if draft.pk != draft_id:
+                return clear_unavailable_response()
+
+            try:
+                expected_version = parse_if_match(request.headers.get("If-Match"))
+            except ValueError:
+                return api_error_response(
+                    "draft_version_required",
+                    "A current draft version is required.",
+                    status=428,
+                )
+            if expected_version != draft.version:
+                return api_error_response(
+                    "draft_conflict",
+                    "The application draft changed. Refresh and try again.",
+                    status=409,
+                )
+
+            serializer = self.serializer_class(instance=draft, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            update_fields = set(serializer.validated_data)
+            for field, value in serializer.validated_data.items():
+                setattr(draft, field, value)
+            draft.record_successful_mutation(now=timezone.now())
+            update_fields.update({"last_activity_at", "expires_at", "version", "updated_at"})
+            draft.save(update_fields=update_fields)
+
+        response = authorized_response(draft)
+        set_ownership_cookie(response, credential, draft)
+        return response
+
+
+class CandidatePatchView(DraftSectionPatchView):
+    serializer_class = CandidatePatchSerializer
+
+
+class ExperiencePatchView(DraftSectionPatchView):
+    serializer_class = ExperiencePatchSerializer

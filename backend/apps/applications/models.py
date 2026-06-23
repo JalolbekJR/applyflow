@@ -38,6 +38,9 @@ class CandidateFields(models.Model):
 
     def save(self, *args, **kwargs):
         self.email_normalized = self.email.strip().casefold()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "email" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"email_normalized"}
         return super().save(*args, **kwargs)
 
 

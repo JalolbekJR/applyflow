@@ -117,7 +117,14 @@ def raw_cookie_values(request, cookie_name: str, *, maximum: int) -> list[str]:
     return values
 
 
-def resolve_request_draft(request, *, required=False, now=None, queryset=None):
+def resolve_request_draft(
+    request,
+    *,
+    required=False,
+    now=None,
+    queryset=None,
+    include_credential=False,
+):
     credentials = raw_cookie_values(
         request,
         settings.DRAFT_COOKIE_NAME,
@@ -134,10 +141,13 @@ def resolve_request_draft(request, *, required=False, now=None, queryset=None):
             draft = verify_credential(credential, now=now, queryset=queryset)
         except CredentialError:
             continue
-        resolved[draft.pk] = draft
+        resolved[draft.pk] = (draft, credential)
     if len(resolved) != 1:
         raise CredentialError
-    return next(iter(resolved.values()))
+    draft, credential = next(iter(resolved.values()))
+    if include_credential:
+        return draft, credential
+    return draft
 
 
 def resolve_creation_key(request, *, required=True) -> str | None:

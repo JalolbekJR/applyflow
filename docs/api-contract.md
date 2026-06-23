@@ -110,7 +110,8 @@ A successful create, resolve, or read returns the same aggregate shape:
       "experience_level": "mid_level",
       "skills": ["Vue 3", "TypeScript", "Accessibility"],
       "optional_message": "",
-      "consent_acknowledged": true
+      "consent_acknowledged": true,
+      "consent_version": "privacy-v1"
     },
     "experience_entries": [],
     "document": {

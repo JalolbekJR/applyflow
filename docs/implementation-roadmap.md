@@ -90,7 +90,8 @@ Production database or migration actions require separate approval.
 
 ## Phase 3 - Secure Drafts And Private CV Upload
 
-Status: architecture and implementation plan ready for review; implementation not started.
+Status: in progress. Slice 1 ownership/lifecycle and Slice 2 draft API are implemented in the
+backend foundation. Phase 3 overall remains in progress.
 
 Objective: replace in-memory fixture draft persistence with authorized, expiring server-side drafts,
 bounded employment entries, and private PDF upload/metadata/replacement/deletion while preserving
@@ -124,6 +125,13 @@ Accepted planning decisions:
 - The first checksum migration leaves `sha256` nullable for existing metadata while service-layer
   creation requires SHA-256 for every new Phase 3 upload.
 - Submission and status lookup remain visibly simulated in the frontend until Phase 4.
+
+Still deferred:
+
+- Experience-entry persistence and CRUD.
+- Private storage, CV upload, document mutation APIs, and cleanup.
+- Frontend integration with the draft API.
+- Submission, deployment, monitoring, and PostgreSQL runtime verification.
 
 ### Implementation Slices
 
