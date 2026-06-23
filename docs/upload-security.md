@@ -4,7 +4,7 @@ CV upload is security-sensitive. A CV file contains personal data and may also c
 
 Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html).
 
-## Implemented Slice 5 Validator Controls
+## Implemented Slice 5 And 6 Controls
 
 - Strict maximum file size: 5 MiB (`5,242,880` bytes); future proxy request ceiling 6 MiB for
   multipart overhead.
@@ -26,8 +26,7 @@ Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/ch
 - Private storage through the application-owned document storage interface.
 - No public executable upload directory.
 - No candidate, public, or staff download endpoint in Phase 3.
-- Upload throttling.
-- Abandoned-draft cleanup.
+- Abandoned-draft logical document retirement and post-commit physical deletion attempt.
 - Logical deletion before retryable physical deletion.
 - SHA-256 integrity metadata that is never returned or logged.
 - Privacy-safe logs.
@@ -71,10 +70,11 @@ candidate data.
    every rejected or failed operation.
 9. Persist metadata. Compensate by deleting the object if persistence fails.
 
-The Slice 5 backend includes a standalone validation service and no upload endpoint. It uses
-`PdfReader(..., strict=True)`, rejects encrypted PDFs instead of decrypting them, catches expected
-parser failures, returns only generic validation errors, and never extracts text, images, fonts,
-attachments, XMP, or rendered content.
+The Slice 5 backend includes a standalone validation service. Slice 6 uses that service from the
+authorized singleton CV endpoint and stores exactly the validated bytes that produced the checksum.
+The validator uses `PdfReader(..., strict=True)`, rejects encrypted PDFs instead of decrypting them,
+catches expected parser failures, returns only generic validation errors, and never extracts text,
+images, fonts, attachments, XMP, or rendered content.
 
 ## Error Responses
 
@@ -90,10 +90,10 @@ Examples:
 
 Malware scanning is not part of the first local prototype unless explicitly implemented later. The project must not claim antivirus scanning exists before it does.
 
-Slice 5 adds PDF parsing, file-type validation, filename display normalization, SHA-256 calculation,
-and bounded private temporary-file validation only. It does not add upload endpoints, document
-metadata mutation, cleanup commands, or malware scanning. The storage layer still only guarantees
-bounded chunked copying and private key handling.
+Slice 6 adds the metadata/upload/replacement/delete API and retryable deletion-attempt metadata. It
+does not add cleanup commands, throttling infrastructure, public or staff download, or malware
+scanning. The storage layer guarantees bounded chunked copying and private key handling, not parser
+sandboxing or antivirus protection.
 
 The Slice 5 validator runs in process. Its size, page-count, strict parsing, object traversal, and
 temporary-file limits reduce risk from hostile input, but they are not a sandbox and do not
@@ -143,7 +143,7 @@ audit event. That work requires a later review and is not implied by upload impl
 - A failed replacement leaves the old document active, and the previous valid object is never
   deleted before the new object is committed.
 
-## Tests Required Later
+## Implemented Test Coverage
 
 - Oversized upload rejected.
 - Unsupported extension rejected.
@@ -160,3 +160,7 @@ audit event. That work requires a later review and is not implied by upload impl
 - Failed replacement preserves the old active document.
 - Storage or metadata failure does not create an untracked live object.
 - Logs do not include file contents or storage keys.
+
+Later cleanup tests still need stale-orphan grace-period coverage and repeated cleanup-command
+evidence. PostgreSQL-specific row-lock and concurrent replacement behavior also remains a separate
+production-readiness track.

@@ -15,7 +15,7 @@ def test_domain_models_are_registered_without_sensitive_fields():
     required_exclusions = {
         "applicationdraft": {"secret_hash", "creation_key_digest"},
         "application": "status_lookup_secret_hash",
-        "applicationdocument": "storage_key",
+        "applicationdocument": {"storage_key", "sha256"},
     }
     for model, model_admin in admin.site._registry.items():
         if model._meta.model_name in required_exclusions:
@@ -33,6 +33,14 @@ def test_domain_models_are_registered_without_sensitive_fields():
         draft_admin.readonly_fields
     )
     assert {"version", "last_activity_at"} <= set(draft_admin.list_display)
+
+    document_admin = next(
+        model_admin
+        for model, model_admin in admin.site._registry.items()
+        if model._meta.model_name == "applicationdocument"
+    )
+    assert {"storage_key", "sha256"}.isdisjoint(set(document_admin.readonly_fields))
+    assert {"deleted_at", "storage_deleted_at"} <= set(document_admin.readonly_fields)
 
     entry_admin = next(
         model_admin

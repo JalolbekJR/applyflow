@@ -8,6 +8,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.documents.services import (
+    lock_active_documents_for_draft,
+    schedule_physical_deletion_for_draft,
+)
 from apps.vacancies.views import public_vacancies
 from config.api_errors import api_error_response
 
@@ -191,6 +195,7 @@ class DraftDetailView(DraftAPIView):
             if expected_version != draft.version:
                 return draft_conflict_response()
 
+            lock_active_documents_for_draft(draft)
             draft.abandon(now=timezone.now())
             draft.save(
                 update_fields=[
@@ -202,6 +207,7 @@ class DraftDetailView(DraftAPIView):
                     "updated_at",
                 ]
             )
+            schedule_physical_deletion_for_draft(draft)
 
         response = no_store(Response(status=204))
         response["ETag"] = draft_etag(draft)

@@ -136,6 +136,10 @@ class ApplicationDraft(CandidateFields):
         self.revoke_credential(now=now)
         if self.pk:
             self.experience_entries.all().delete()
+            self.documents.filter(deleted_at__isnull=True).update(
+                deleted_at=now,
+                original_name_display="",
+            )
         self.record_successful_mutation(now=now)
 
     def expire(self, *, now=None) -> None:

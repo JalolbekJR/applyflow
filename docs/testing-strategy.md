@@ -1,6 +1,7 @@
 # Testing Strategy
 
-Testing covers the implemented Phase 1 frontend and Phase 2 backend foundation.
+Testing covers the implemented Phase 1 frontend, Phase 2 backend foundation, and completed Phase 3
+backend slices.
 
 ## Current Frontend Checks
 
@@ -57,13 +58,14 @@ Current pytest coverage includes:
 - Separate draft and submitted application records.
 - Submitted-application public-reference and vacancy/normalized-email uniqueness.
 - Draft and status credential hashing and verification.
-- Document owner XOR and active-document uniqueness constraints for each owner type.
-- Safe Django Admin registration with credential hashes and storage keys excluded.
+- Document owner XOR, active-document uniqueness, checksum, and physical-deletion constraints.
+- Safe Django Admin registration with credential hashes, storage keys, and checksums excluded.
 - Health, read-only vacancy API, unsupported mutation, and JSON error behavior.
 - PostgreSQL URL parsing and secure DRF permission defaults.
 - Canonical private document storage keys, invalid-key rejection, duplicate-save protection,
   chunked local writes, temporary-file cleanup, deterministic fake/local adapter enumeration,
-  strict document-storage configuration, and no public storage route or URL capability.
+  strict document-storage configuration, no public storage route or URL capability, secure PDF
+  validation, and authorized singleton CV metadata/upload/replacement/delete behavior.
 
 ## Phase 3 Planned Test Matrix
 

@@ -282,6 +282,7 @@ DOCUMENT_PRIVATE_ROOT = validate_document_private_root(
     os.getenv("DOCUMENT_PRIVATE_ROOT"),
     app_env=APP_ENV,
 )
+FILE_UPLOAD_MAX_MEMORY_SIZE = 64 * 1024
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],

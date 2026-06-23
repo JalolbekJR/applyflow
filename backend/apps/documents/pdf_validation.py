@@ -7,6 +7,7 @@ import re
 import tempfile
 import unicodedata
 import warnings
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
@@ -90,6 +91,15 @@ class PDFValidationResult:
     page_count: int
 
 
+@dataclass(frozen=True)
+class ValidatedPDFUpload:
+    metadata: PDFValidationResult
+    _path: Path
+
+    def open(self) -> BinaryIO:
+        return self._path.open("rb")
+
+
 class PDFValidationError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -153,6 +163,30 @@ def validate_pdf_upload(
     if source is None:
         raise MissingPDFFile()
 
+    with validated_pdf_upload(
+        source,
+        original_filename=original_filename,
+        declared_content_type=declared_content_type,
+        declared_size=declared_size,
+        max_bytes=max_bytes,
+        temporary_parent=temporary_parent,
+    ) as validated:
+        return validated.metadata
+
+
+@contextmanager
+def validated_pdf_upload(
+    source: bytes | bytearray | memoryview | BinaryIO | None,
+    *,
+    original_filename: str | None,
+    declared_content_type: str | None,
+    declared_size: int | None = None,
+    max_bytes: int | None = None,
+    temporary_parent: Path | str | None = None,
+):
+    if source is None:
+        raise MissingPDFFile()
+
     limit = _configured_max_upload_bytes(max_bytes)
     if declared_size is not None and declared_size > limit:
         raise PDFTooLarge()
@@ -168,16 +202,18 @@ def validate_pdf_upload(
         try:
             size_bytes, sha256 = _copy_bounded_upload(stream, temporary_path, limit)
             page_count = _inspect_pdf_file(temporary_path)
+            yield ValidatedPDFUpload(
+                metadata=PDFValidationResult(
+                    original_name_display=display_name,
+                    detected_content_type=PDF_CONTENT_TYPE,
+                    size_bytes=size_bytes,
+                    sha256=sha256,
+                    page_count=page_count,
+                ),
+                _path=temporary_path,
+            )
         finally:
             _unlink_temporary_file(temporary_path)
-
-    return PDFValidationResult(
-        original_name_display=display_name,
-        detected_content_type=PDF_CONTENT_TYPE,
-        size_bytes=size_bytes,
-        sha256=sha256,
-        page_count=page_count,
-    )
 
 
 def normalize_pdf_display_name(original_filename: str | None) -> str:

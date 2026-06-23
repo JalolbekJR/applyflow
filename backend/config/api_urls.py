@@ -9,6 +9,7 @@ from apps.applications.views import (
     ExperienceEntryDetailView,
     ExperiencePatchView,
 )
+from apps.documents.views import CVDocumentView
 from apps.vacancies.views import VacancyDetailView, VacancyListView
 
 from .api_views import HealthView, csrf_bootstrap
@@ -44,6 +45,11 @@ urlpatterns = [
         "application-drafts/<uuid:draft_id>/experiences/<uuid:experience_id>/",
         ExperienceEntryDetailView.as_view(),
         name="draft-experience-entry-detail",
+    ),
+    path(
+        "application-drafts/<uuid:draft_id>/documents/cv/",
+        CVDocumentView.as_view(),
+        name="draft-document-cv",
     ),
     path("vacancies/", VacancyListView.as_view(), name="vacancy-list"),
     path("vacancies/<slug:slug>/", VacancyDetailView.as_view(), name="vacancy-detail"),

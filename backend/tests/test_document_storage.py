@@ -428,7 +428,7 @@ def test_private_storage_is_not_exposed_by_urls_or_media_settings(settings):
     route_text = "\n".join(str(pattern.pattern) for pattern in [*urlpatterns, *api_urlpatterns])
     assert "static(" not in route_text
     assert "serve" not in route_text
-    assert "documents/cv" not in route_text
+    assert "documents/cv" in route_text
     assert getattr(settings, "MEDIA_ROOT", "") == ""
     assert "MEDIA_URL" not in settings_source
     assert "MEDIA_ROOT" not in settings_source

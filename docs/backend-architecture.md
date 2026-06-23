@@ -4,24 +4,26 @@
 
 - Django 5.2.15 and Django REST Framework 3.17.1 provide a modular-monolith foundation with focused
   `vacancies`, `applications`, and `documents` apps.
-- Phase 2 exposes health and read-only published-vacancy APIs. Unmarked DRF views are staff-only by
-  default, and candidate mutation permissions do not exist yet.
+- Phase 2 exposes health and read-only published-vacancy APIs. Phase 3 backend slices now expose
+  authorized anonymous draft, experience-entry, and singleton CV metadata/upload/delete APIs.
+  Unmarked DRF views remain staff-only by default.
 - `ApplicationDraft` already has a UUID, vacancy owner, password-style credential hash, structured
   candidate and experience-summary fields, lifecycle status, expiry, and timestamps.
-- `ApplicationDocument` already enforces exactly one draft or application owner and at most one
-  active document per owner. It stores metadata only; no file is accepted or saved.
+- `ApplicationDocument` enforces exactly one draft or application owner and at most one active
+  document per owner. Slice 6 stores validated private CV bytes through the document service and
+  keeps only safe metadata in candidate JSON.
 - The error handler creates the documented envelope but currently creates request IDs only for
   errors and does not share them with request logs or headers.
-- CSRF middleware is enabled, but there is no anonymous CSRF-token bootstrap endpoint yet and the
-  final Phase 3 cookie contract remains unimplemented.
+- CSRF middleware is enabled, and Phase 3 includes an anonymous CSRF-token bootstrap endpoint plus
+  the same-origin HttpOnly draft-cookie contract for implemented backend draft APIs.
 - The Nuxt frontend keeps one draft in `useState`, uses typed fixture services, checks vacancy
   ownership in `useApplicationDraft`, reads only browser file metadata, and preserves accessible
   loading and recovery states. Refreshing or closing the tab loses the draft.
 - The existing product uses experience level, skills, a short message, and a CV. Phase 3 explicitly
   adds zero to five bounded CRUD employment entries ordered by `position`; they remain optional so
   the CV and existing free-text summary stay primary.
-- No package currently performs PDF structural parsing. A parser dependency would require separate
-  approval before implementation.
+- PDF structural parsing is implemented with the pinned `pypdf==6.14.1` base package. Parser
+  upgrades or extras require a fresh dependency review.
 
 ## References
 

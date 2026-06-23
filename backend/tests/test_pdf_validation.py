@@ -429,4 +429,3 @@ def test_validation_boundary_does_not_add_storage_db_or_url_routes(django_assert
     after_routes = {str(pattern.pattern) for pattern in get_resolver().url_patterns}
     assert result.sha256
     assert before_routes == after_routes
-    assert not any("documents/cv" in route for route in after_routes)

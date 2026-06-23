@@ -44,16 +44,16 @@ and `DELETE` requires `X-CSRFToken`.
 | --- | --- | --- | --- | --- | --- |
 | `GET` | `/api/v1/csrf/` | Set the CSRF cookie, establish a short-lived draft-creation key when needed, and return a masked token for the request header. | `200` | `500` | Safe and repeatable. |
 | `GET` | `/api/v1/application-drafts/active/` | Resolve the draft authorized by the ownership cookie. | `204` no cookie, `200` active draft | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. Invalid, expired, revoked, or malformed ownership clears the cookie. |
-| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error`, `429 rate_limited` | Idempotent for the same valid ownership cookie or unexpired creation key and vacancy. A lost create response can be retried with the same creation key without creating another row. An invalid ownership cookie is cleared and never creates a draft in the same request. |
+| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error` | Idempotent for the same valid ownership cookie or unexpired creation key and vacancy. A lost create response can be retried with the same creation key without creating another row. An invalid ownership cookie is cleared and never creates a draft in the same request. |
 | `GET` | `/api/v1/application-drafts/{draft_id}/` | Read the authorized draft aggregate. | `200` | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/candidate/` | Partially update candidate fields. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/experience/` | Partially update experience level, skills, message, and acknowledgement. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Same as candidate update. |
-| `POST` | `/api/v1/application-drafts/{draft_id}/experiences/` | Create one bounded employment entry. | `201` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`, `429 rate_limited` | Not automatically repeatable. Disable duplicate activation and re-fetch before retrying after an unknown result. |
+| `PATCH` | `/api/v1/application-drafts/{draft_id}/candidate/` | Partially update candidate fields. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result. |
+| `PATCH` | `/api/v1/application-drafts/{draft_id}/experience/` | Partially update experience level, skills, message, and acknowledgement. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Same as candidate update. |
+| `POST` | `/api/v1/application-drafts/{draft_id}/experiences/` | Create one bounded employment entry. | `201` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Not automatically repeatable. Disable duplicate activation and re-fetch before retrying after an unknown result. |
 | `PATCH` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Partially update an owned employment entry. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Data-idempotent for the current `If-Match`. |
 | `DELETE` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Delete an owned employment entry. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
 | `DELETE` | `/api/v1/application-drafts/{draft_id}/` | Abandon and revoke the draft, scrub candidate data, and queue physical document cleanup. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request revokes the secret and clears the cookie. A repeat is safe and returns the generic `404`. |
 | `GET` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Retrieve authorized singleton CV metadata only. | `200` | `404 draft_unavailable` | Safe and repeatable. |
-| `PUT` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Create or replace the authorized singleton CV after the new file passes validation. | `201` created, `200` replaced | `404 draft_unavailable`, `409 draft_conflict`, `413 upload_too_large`, `415 unsupported_file_type`, `422 invalid_pdf`, `428 draft_version_required`, `429 rate_limited` | Replacement is one logical operation. Re-fetch after an unknown result; never blindly resend file bytes. |
+| `PUT` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Create or replace the authorized singleton CV after the new file passes validation. | `201` created, `200` replaced | `404 draft_unavailable`, `409 draft_conflict`, `413 upload_too_large`, `415 unsupported_file_type`, `422 validation_error`, `422 invalid_pdf`, `428 draft_version_required`, `503 document_storage_unavailable` | Replacement is one logical operation. Re-fetch after an unknown result; never blindly resend file bytes. |
 | `DELETE` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Logically delete the authorized singleton CV and schedule physical deletion. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
 
 Phase 3 does not expose document contents. There is no candidate or public download endpoint, no
@@ -249,6 +249,9 @@ Singleton CV create and replacement use `multipart/form-data` with:
 
 - `file`: one PDF.
 
+No additional form fields or additional files are accepted. The draft cookie, route UUID, and
+`If-Match` precondition are checked before multipart parsing and PDF validation begin.
+
 `PUT /api/v1/application-drafts/{draft_id}/documents/cv/` creates the active CV when none exists
 and replaces it when one already exists. No public document identifier is required for normal
 candidate operations. The response contains only the safe document metadata shown in the draft
@@ -257,8 +260,9 @@ document UUID, or download URL.
 
 Replacement preserves the current active document until the new file has passed validation and has
 been stored. A failed replacement leaves the previous document active. Delete makes the document
-unavailable before physical storage cleanup runs. Phase 3 exposes metadata only: there is no
-candidate, public, or staff download endpoint and no public storage URL.
+unavailable before physical storage cleanup runs; failed physical deletion remains retryable via
+`storage_deleted_at` metadata that is never returned to candidates. Phase 3 exposes metadata only:
+there is no candidate, public, or staff download endpoint and no public storage URL.
 
 ## Error Shape
 
@@ -302,7 +306,6 @@ Rules:
 | `415` | Declared or detected file type is unsupported. |
 | `422` | Candidate, experience, or PDF content validation failed. |
 | `428` | An unsafe mutation omitted the required `If-Match` header. |
-| `429` | Anonymous request limit exceeded. |
 
 ## Explicitly Deferred
 

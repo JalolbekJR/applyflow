@@ -98,9 +98,10 @@ Do not show:
 - Documents require explicit object-level staff authorization before storage access.
 - Status lookup requires correct lookup credentials.
 
-These are target controls. Phase 2 includes schema and safe admin/API defaults only. Candidate draft
-authorization, status-secret lookup, and document access are not implemented. The frontend remains
-fixture-backed and must not collect real candidate data.
+Phase 3 backend slices implement candidate draft authorization and authorized CV metadata, upload,
+replacement, and deletion. Status-secret lookup, staff document download, and frontend API
+integration remain unimplemented. The frontend remains fixture-backed and must not collect real
+candidate data.
 
 Phase 3 ownership is one active draft per browser. The browser receives a host-only HttpOnly cookie
 containing a versioned draft UUID plus a 256-bit random secret; only the secret hash is stored. The

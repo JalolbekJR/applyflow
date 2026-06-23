@@ -80,7 +80,7 @@ Implemented foundation:
 - Django Admin registration for vacancy, application, draft, and document metadata.
 - Pytest and Ruff tooling.
 
-Still deferred:
+Deferred after Phase 2 and implemented or reconsidered during later phases:
 
 - Frontend API integration and authoritative server-backed candidate workflows.
 - Candidate draft authorization, throttling, OpenAPI generation, and privacy-safe operational logs.
@@ -90,9 +90,9 @@ Production database or migration actions require separate approval.
 
 ## Phase 3 - Secure Drafts And Private CV Upload
 
-Status: in progress. Slice 1 ownership/lifecycle, Slice 2 draft API, Slice 3 backend
-experience-entry persistence, and Slice 4 private storage abstraction are implemented in the
-backend foundation. Phase 3 overall remains in progress.
+Status: in progress. Slices 1-6 are implemented in the backend foundation. Phase 3 overall remains
+in progress until frontend integration, cleanup, final regression review, and documentation
+reconciliation are complete.
 
 Objective: replace in-memory fixture draft persistence with authorized, expiring server-side drafts,
 bounded employment entries, and private PDF upload/metadata/replacement/deletion while preserving
@@ -129,8 +129,8 @@ Accepted planning decisions:
 
 Still deferred:
 
-- CV upload, PDF validation, document mutation APIs, and cleanup.
-- Frontend integration with the draft API.
+- Frontend integration with the draft and document APIs.
+- Cleanup management command and stale-orphan cleanup.
 - Submission, deployment, monitoring, and PostgreSQL runtime verification.
 
 ### Implementation Slices
@@ -145,7 +145,7 @@ names the preferred model for implementation support, not permission to begin wo
 | 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, and parent-version increments. Frontend integration remains part of Slice 7. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests when integration begins. |
 | 4. Private storage abstraction | Complete: provider-neutral interface, private local adapter, ignored root, fake/test adapter, canonical key generation, and configuration validation. No upload endpoint or document download was added. | Slice 1. | GPT-5.5 | High; storage-path and privacy boundaries must be exact. | Traversal/key tests, no public route, adapter contract tests, configuration checks. |
 | 5. Upload validation | Complete: size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, strict `pypdf==6.14.1` validation, and no endpoint/storage/DB write. | Slice 4 and the reviewed base parser package. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
-| 6. Document mutation API | Singleton CV create/read/replace/delete, compensation, row locks, active uniqueness, and retryable deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, race/conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests. |
+| 6. Document mutation API | Complete: singleton CV metadata/read, create, replace, logical delete, abandonment retirement, bounded collision retry, compensation, row locks, active uniqueness, and retryable physical-deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests, admin privacy checks. |
 | 7. Frontend integration | Real draft service/composable, browser-only bootstrap, 800 ms autosave, route refresh, conflict/expiry UI, experience CRUD, XHR upload progress/retry/cancel/replace/delete. | Stable API from slices 2, 3, and 6. | GPT-5.4 for primary work; GPT-5.5 for conflict/security review. | High; state recovery and accessibility cross multiple routes. | Format, lint, typecheck, Vitest, build, Playwright candidate flow, responsive/reduced-motion/manual screen-reader spot checks. |
 | 8. Cleanup | Idempotent dry-run/batched management command, revoke/scrub, pending blob deletion, stale-orphan grace period, aggregate logs. | Slices 1, 4, and 6. | GPT-5.5 | High; deletion failures must not leak data or lose cleanup keys. | Dry-run/apply tests, repeated-run tests, storage-failure retries, cleanup eligibility, privacy-log assertions. |
 | 9. Security and regression tests | Complete authorization, CSRF, upload, race, logging, admin, and existing Phase 1/2 regression matrix. | Slices 1-8. | GPT-5.5 | High; independent adversarial review is needed before handoff. | Full backend/frontend suites; PostgreSQL-specific plan executed when an approved service exists; browser interaction review. |
@@ -159,10 +159,10 @@ names the preferred model for implementation support, not permission to begin wo
    migration is applied.
 3. **Dependency gate:** the exact `pypdf==6.14.1` base release, license, Python compatibility, and
    dependency graph were reviewed before parser code. Future parser upgrades repeat this gate.
-4. **Storage gate:** Slice 4 now covers private-root isolation, generated keys, duplicate-save
-   protection, failure cleanup, strict configuration, and no public URL capability. Replacement
-   compensation and retryable physical deletion remain part of later document mutation and cleanup
-   slices before accepting uploads.
+4. **Storage gate:** Slice 4 covers private-root isolation, generated keys, duplicate-save
+   protection, failure cleanup, strict configuration, and no public URL capability. Slice 6 adds
+   replacement compensation and retryable physical deletion metadata. Stale-orphan cleanup remains
+   a later cleanup slice.
 5. **Frontend gate:** existing fixtures remain available until the real API path passes unit,
    browser, responsive, keyboard, focus, and reduced-motion checks.
 6. **Database gate:** SQLite checks may support implementation, but PostgreSQL row locking,

@@ -26,11 +26,16 @@ class ApplicationDocument(models.Model):
     storage_key = models.CharField(max_length=500, unique=True)
     detected_content_type = models.CharField(max_length=100)
     size = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64, null=True, blank=True)  # noqa: DJ001
     uploaded_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    storage_deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("-uploaded_at",)
+        indexes = [
+            models.Index(fields=("deleted_at", "storage_deleted_at"), name="doc_cleanup_idx"),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=(Q(draft__isnull=False) & Q(application__isnull=True))
@@ -46,6 +51,10 @@ class ApplicationDocument(models.Model):
                 fields=("application",),
                 condition=Q(deleted_at__isnull=True),
                 name="uniq_active_document_per_application",
+            ),
+            models.CheckConstraint(
+                condition=Q(storage_deleted_at__isnull=True) | Q(deleted_at__isnull=False),
+                name="doc_storage_deleted_requires_deleted",
             ),
         ]
 

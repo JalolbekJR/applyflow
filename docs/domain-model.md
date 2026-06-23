@@ -1,8 +1,8 @@
 # Domain Model
 
 Phase 2 implements vacancy, application draft, submitted application, and document-metadata models
-with UUID identifiers. Phase 3 adds lifecycle activity, optimistic mutation conflicts, and bounded
-employment entries. Private-document storage lifecycle work remains a later slice.
+with UUID identifiers. Phase 3 adds lifecycle activity, optimistic mutation conflicts, bounded
+employment entries, private document storage metadata, and retryable physical-deletion tracking.
 
 ## Phase 3 Diagram
 
@@ -172,11 +172,12 @@ Implemented migrations:
 1. Draft lifecycle/version fields with safe defaults and a data migration that sets
    `last_activity_at` from `updated_at` for existing fictional records.
 2. `DraftExperienceEntry` with ordering and current-role constraints.
+3. Document checksum and physical-deletion tracking with `sha256`, `storage_deleted_at`, a cleanup
+   index, and a check constraint that confirmed physical deletion requires logical deletion first.
 
 Still deferred:
 
-1. Document checksum and physical-deletion tracking.
-2. PostgreSQL-only concurrency and SQL verification before any production-readiness claim.
+1. PostgreSQL-only concurrency and SQL verification before any production-readiness claim.
 
 ## Deferred Schema Decisions
 
