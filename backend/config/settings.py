@@ -6,8 +6,13 @@ from urllib.parse import unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+REPOSITORY_ROOT = BASE_DIR.parent
 APPROVED_DRAFT_COOKIE_PATH = "/api/v1/application-drafts/"
 DRAFT_COOKIE_PATH_ERROR = "DRAFT_COOKIE_PATH must match the approved application drafts path."
+DOCUMENT_STORAGE_BACKENDS = {"local_private"}
+DEFAULT_DOCUMENT_PRIVATE_ROOT = BASE_DIR / ".private-documents"
+DOCUMENT_STORAGE_BACKEND_ERROR = "DOCUMENT_STORAGE_BACKEND must be exactly one of: local_private."
+DOCUMENT_PRIVATE_ROOT_ERROR = "DOCUMENT_PRIVATE_ROOT must be an absolute private directory path."
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -60,6 +65,53 @@ def validate_draft_cookie_path(value: object) -> str:
     ):
         raise ImproperlyConfigured(DRAFT_COOKIE_PATH_ERROR)
     return value
+
+
+def validate_document_storage_backend(value: object) -> str:
+    if not isinstance(value, str) or value not in DOCUMENT_STORAGE_BACKENDS:
+        raise ImproperlyConfigured(DOCUMENT_STORAGE_BACKEND_ERROR)
+    return value
+
+
+def validate_document_private_root(value: object | None, *, app_env: str) -> Path:
+    if value is None:
+        if app_env != "development":
+            raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+        candidate = DEFAULT_DOCUMENT_PRIVATE_ROOT
+    else:
+        if not isinstance(value, str) or not value:
+            raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+        if any(
+            character == "\x00" or ord(character) < 32 or ord(character) == 127
+            for character in value
+        ):
+            raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+
+    resolved = candidate.resolve(strict=False)
+    if resolved.anchor == str(resolved):
+        raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+    repository_root = REPOSITORY_ROOT.resolve(strict=False)
+    if resolved == repository_root:
+        raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+
+    public_roots = [
+        BASE_DIR / "static",
+        BASE_DIR / "staticfiles",
+        BASE_DIR / "media",
+        REPOSITORY_ROOT / "static",
+        REPOSITORY_ROOT / "staticfiles",
+        REPOSITORY_ROOT / "media",
+        REPOSITORY_ROOT / "frontend" / "public",
+        REPOSITORY_ROOT / "frontend" / "app" / "public",
+    ]
+    for public_root in public_roots:
+        resolved_public_root = public_root.resolve(strict=False)
+        if resolved == resolved_public_root or resolved.is_relative_to(resolved_public_root):
+            raise ImproperlyConfigured(DOCUMENT_PRIVATE_ROOT_ERROR)
+    return resolved
 
 
 def draft_cookie_secure(app_env: str, *, configured: bool) -> bool:
@@ -205,6 +257,14 @@ DRAFT_CREATION_KEY_LIFETIME_SECONDS = env_bounded_positive_int(
 DRAFT_INACTIVITY_LIFETIME = timedelta(seconds=DRAFT_INACTIVITY_SECONDS)
 DRAFT_ABSOLUTE_LIFETIME = timedelta(seconds=DRAFT_ABSOLUTE_SECONDS)
 DRAFT_CREATION_KEY_LIFETIME = timedelta(seconds=DRAFT_CREATION_KEY_LIFETIME_SECONDS)
+
+DOCUMENT_STORAGE_BACKEND = validate_document_storage_backend(
+    os.getenv("DOCUMENT_STORAGE_BACKEND", "local_private")
+)
+DOCUMENT_PRIVATE_ROOT = validate_document_private_root(
+    os.getenv("DOCUMENT_PRIVATE_ROOT"),
+    app_env=APP_ENV,
+)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],

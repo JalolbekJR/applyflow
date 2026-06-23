@@ -61,6 +61,9 @@ Current pytest coverage includes:
 - Safe Django Admin registration with credential hashes and storage keys excluded.
 - Health, read-only vacancy API, unsupported mutation, and JSON error behavior.
 - PostgreSQL URL parsing and secure DRF permission defaults.
+- Canonical private document storage keys, invalid-key rejection, duplicate-save protection,
+  chunked local writes, temporary-file cleanup, deterministic fake/local adapter enumeration,
+  strict document-storage configuration, and no public storage route or URL capability.
 
 ## Phase 3 Planned Test Matrix
 
@@ -112,6 +115,8 @@ Current pytest coverage includes:
 | Malformed/encrypted PDF | Structural parse failure, zero pages, over-ten pages, encryption, embedded files, JavaScript, `/OpenAction`, `/AA`, file-attachment annotations, RichMedia/Movie/Sound/Screen/3D annotations, or automatic actions rejected. |
 | Malicious filename | Traversal separators, absolute paths, control characters, Unicode edge cases, excessive length, and blank names normalize to safe display metadata and never affect the key. |
 | Checksum | SHA-256 matches stored bytes but never appears in API output or logs. |
+| Storage key boundary | Implemented in Slice 4: canonical `drafts/{draft_uuid}/{document_uuid}.pdf` keys reject traversal, alternate separators, control characters, non-canonical UUIDs, unexpected extensions, and temporary-name collisions before storage access. |
+| Private adapter contract | Implemented in Slice 4: local and fake adapters share save/open/delete/exists/enumeration behavior, duplicate saves never overwrite, failed writes clean temporary files, and enumeration returns stable relative keys only. |
 | Initial storage failure | No active metadata; form answers preserved; safe retry response. |
 | Metadata failure after save | Compensating delete runs; failed compensation becomes orphan-cleanup evidence. |
 | Replacement success | Old document stays active until new validation/storage succeeds; transaction activates only the new metadata; old blob becomes cleanup-eligible. |

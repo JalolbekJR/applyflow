@@ -23,7 +23,7 @@ Reference: [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/ch
 - Original filename normalized with basename extraction, Unicode NFKC, control removal, whitespace
   collapse, and a 120-character cap for escaped display metadata only.
 - No user-controlled path fragments.
-- Private storage.
+- Private storage through the application-owned document storage interface.
 - No public executable upload directory.
 - No candidate, public, or staff download endpoint in Phase 3.
 - Upload throttling.
@@ -44,6 +44,11 @@ drafts/{draft_uuid}/{document_uuid}.pdf
 ```
 
 This is illustrative. The final implementation must ensure candidates cannot control path fragments.
+
+Slice 4 implements this canonical draft CV key shape. Both UUIDs are supplied by trusted server
+code, rendered in lowercase canonical form, and validated again by every storage adapter before
+filesystem access. The key excludes original filenames, names, emails, vacancy slugs, and other
+candidate data.
 
 ## Validation Order
 
@@ -81,6 +86,11 @@ Examples:
 
 Malware scanning is not part of the first local prototype unless explicitly implemented later. The project must not claim antivirus scanning exists before it does.
 
+Slice 4 does not add PDF parsing, file-type validation, upload endpoints, document metadata
+mutation, cleanup commands, or malware scanning. Authoritative upload-size enforcement remains a
+Slice 5 responsibility; the storage layer only guarantees bounded chunked copying and private key
+handling.
+
 ## Deferred File Types
 
 DOC and DOCX are possible later extensions only after dedicated validation, storage, and security work. They are excluded from version one because they expand parser, archive-format, download, and rendering edge cases.
@@ -98,6 +108,11 @@ If scanning is later added, document:
 
 Phase 3 returns authorized document metadata only. It does not expose candidate, public, or staff
 document content and never returns a storage URL. Django Admin shows metadata without a file link.
+
+The implemented storage interface has no public URL method and returns no filesystem path. The local
+private adapter stores only canonical keys beneath the configured private root, rejects traversal and
+symlink escape attempts before access, rejects duplicate saves, cleans temporary files after failed
+writes, and enumerates only canonical relative keys for future cleanup work.
 
 A future staff download requires authenticated object-level permission, an attachment-only
 streaming response, safe response filename, `nosniff`, no public storage URL, and a privacy-safe

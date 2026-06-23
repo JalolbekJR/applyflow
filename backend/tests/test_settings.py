@@ -11,8 +11,12 @@ from django.core.exceptions import ImproperlyConfigured
 
 from config.settings import (
     APPROVED_DRAFT_COOKIE_PATH,
+    DEFAULT_DOCUMENT_PRIVATE_ROOT,
+    DOCUMENT_PRIVATE_ROOT_ERROR,
+    DOCUMENT_STORAGE_BACKEND_ERROR,
     database_config,
     draft_cookie_secure,
+    validate_document_private_root,
 )
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +28,8 @@ PROBE_ENV_NAMES = (
     "DRAFT_ABSOLUTE_SECONDS",
     "DRAFT_CREATION_COOKIE_NAME",
     "DRAFT_CREATION_KEY_LIFETIME_SECONDS",
+    "DOCUMENT_STORAGE_BACKEND",
+    "DOCUMENT_PRIVATE_ROOT",
 )
 PROBE_CODE = """
 import json
@@ -41,6 +47,9 @@ print(
             "draft_creation_key_lifetime_seconds": int(
                 s.DRAFT_CREATION_KEY_LIFETIME.total_seconds()
             ),
+            "document_storage_backend": s.DOCUMENT_STORAGE_BACKEND,
+            "document_private_root": str(s.DOCUMENT_PRIVATE_ROOT),
+            "document_private_root_exists": s.DOCUMENT_PRIVATE_ROOT.exists(),
         }
     )
 )
@@ -115,6 +124,11 @@ def test_draft_settings_use_approved_defaults_and_only_allow_local_insecure_cook
     assert draft_cookie_secure("production", configured=False) is True
 
 
+def test_document_storage_settings_use_safe_development_defaults():
+    assert settings.DOCUMENT_STORAGE_BACKEND == "local_private"
+    assert settings.DOCUMENT_PRIVATE_ROOT == DEFAULT_DOCUMENT_PRIVATE_ROOT.resolve(strict=False)
+
+
 def run_settings_probe(**overrides):
     environment = os.environ.copy()
     for name in PROBE_ENV_NAMES:
@@ -177,7 +191,18 @@ def test_draft_environment_values_are_loaded_under_canonical_names():
     )
 
     payload = parse_probe_output(result)
-    assert payload == {
+    assert {
+        key: payload[key]
+        for key in (
+            "draft_cookie_name",
+            "draft_cookie_path",
+            "draft_cookie_secure",
+            "draft_inactivity_seconds",
+            "draft_absolute_seconds",
+            "draft_creation_cookie_name",
+            "draft_creation_key_lifetime_seconds",
+        )
+    } == {
         "draft_cookie_name": "fictional_draft_cookie",
         "draft_cookie_path": APPROVED_DRAFT_COOKIE_PATH,
         "draft_cookie_secure": True,
@@ -438,3 +463,106 @@ def test_environment_examples_use_only_canonical_slice_one_names():
     assert all(name in infrastructure for name in canonical_names)
     assert "DRAFT_TTL_SECONDS" not in combined
     assert "DRAFT_ABSOLUTE_TTL_SECONDS" not in combined
+
+
+def test_document_storage_environment_examples_use_slice_four_names():
+    env_example = (BACKEND_ROOT / ".env.example").read_text(encoding="utf-8")
+    infrastructure = (BACKEND_ROOT.parent / "docs" / "infrastructure-plan.md").read_text(
+        encoding="utf-8"
+    )
+    combined = f"{env_example}\n{infrastructure}"
+
+    assert "DOCUMENT_STORAGE_BACKEND=local_private" in env_example
+    assert "DOCUMENT_PRIVATE_ROOT=" in env_example
+    assert "DOCUMENT_STORAGE_BACKEND" in infrastructure
+    assert "DOCUMENT_PRIVATE_ROOT" in infrastructure
+    assert "MEDIA_URL" not in combined
+    assert "MEDIA_ROOT" not in combined
+
+
+def test_document_storage_default_does_not_create_directory_during_settings_import():
+    default_root = DEFAULT_DOCUMENT_PRIVATE_ROOT.resolve(strict=False)
+    result = run_settings_probe()
+
+    payload = parse_probe_output(result)
+    assert payload["document_storage_backend"] == "local_private"
+    assert Path(payload["document_private_root"]) == default_root
+    assert payload["document_private_root_exists"] == default_root.exists()
+
+
+def test_document_storage_accepts_valid_explicit_absolute_root_without_creating_it(tmp_path):
+    private_root = tmp_path / "documents"
+    result = run_settings_probe(DOCUMENT_PRIVATE_ROOT=str(private_root))
+
+    payload = parse_probe_output(result)
+    assert payload["document_storage_backend"] == "local_private"
+    assert Path(payload["document_private_root"]) == private_root.resolve(strict=False)
+    assert payload["document_private_root_exists"] is False
+    assert not private_root.exists()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "local_private ",
+        " local_private",
+        "fake",
+        "apps.documents.storage.LocalPrivateDocumentStorage",
+    ],
+)
+def test_unknown_empty_or_malformed_document_storage_backend_fails(value):
+    result = run_settings_probe(DOCUMENT_STORAGE_BACKEND=value)
+
+    assert_settings_load_failed(result, DOCUMENT_STORAGE_BACKEND_ERROR)
+    assert_raw_input_not_echoed(result.stderr, "DOCUMENT_STORAGE_BACKEND", value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "relative/private-documents",
+        "",
+        ".",
+        "private\tdocuments",
+    ],
+)
+def test_relative_empty_or_control_character_document_private_roots_fail(value):
+    result = run_settings_probe(DOCUMENT_PRIVATE_ROOT=value)
+
+    assert_settings_load_failed(result, DOCUMENT_PRIVATE_ROOT_ERROR)
+    assert_raw_input_not_echoed(result.stderr, "DOCUMENT_PRIVATE_ROOT", value)
+
+
+def test_null_byte_document_private_root_fails_validation_without_subprocess():
+    with pytest.raises(ImproperlyConfigured, match=DOCUMENT_PRIVATE_ROOT_ERROR):
+        validate_document_private_root("private\x00documents", app_env="development")
+
+
+@pytest.mark.parametrize(
+    "path_factory",
+    [
+        lambda: Path(Path.cwd().anchor),
+        lambda: BACKEND_ROOT.parent,
+        lambda: BACKEND_ROOT / "static",
+        lambda: BACKEND_ROOT / "static" / "documents",
+        lambda: BACKEND_ROOT / "staticfiles",
+        lambda: BACKEND_ROOT / "media",
+        lambda: BACKEND_ROOT.parent / "frontend" / "public",
+        lambda: BACKEND_ROOT.parent / "frontend" / "public" / "documents",
+    ],
+)
+def test_public_or_overbroad_document_private_roots_fail(path_factory):
+    result = run_settings_probe(DOCUMENT_PRIVATE_ROOT=str(path_factory()))
+
+    assert_settings_load_failed(result, DOCUMENT_PRIVATE_ROOT_ERROR)
+
+
+def test_non_development_environment_requires_explicit_document_private_root():
+    result = run_settings_probe(
+        APP_ENV="staging",
+        DJANGO_ALLOWED_HOSTS="applyflow.example.test",
+        DATABASE_URL="postgresql://applyflow:fictional@db.example.test:5432/applyflow",
+    )
+
+    assert_settings_load_failed(result, DOCUMENT_PRIVATE_ROOT_ERROR)
