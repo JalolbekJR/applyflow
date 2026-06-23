@@ -5,6 +5,7 @@ def test_domain_models_are_registered_without_sensitive_fields():
     expected = {
         "vacancy",
         "applicationdraft",
+        "draftexperienceentry",
         "application",
         "applicationdocument",
     }
@@ -32,3 +33,11 @@ def test_domain_models_are_registered_without_sensitive_fields():
         draft_admin.readonly_fields
     )
     assert {"version", "last_activity_at"} <= set(draft_admin.list_display)
+
+    entry_admin = next(
+        model_admin
+        for model, model_admin in admin.site._registry.items()
+        if model._meta.model_name == "draftexperienceentry"
+    )
+    assert {"summary", "draft", "position"} <= set(entry_admin.readonly_fields)
+    assert "summary" not in set(entry_admin.search_fields)

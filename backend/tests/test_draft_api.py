@@ -2,7 +2,7 @@ import base64
 import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
+from datetime import date, timedelta
 from threading import Barrier
 
 import pytest
@@ -88,6 +88,72 @@ def patch_draft(client, draft_id, section, payload, token, *, version=1):
         f"/api/v1/application-drafts/{draft_id}/{section}/",
         payload,
         content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH=f'"draft-{version}"',
+    )
+
+
+def experience_entry_payload(**overrides):
+    payload = {
+        "organization": "Example Studio",
+        "role_title": "Frontend Developer",
+        "start_month": "2024-01",
+        "end_month": None,
+        "is_current": True,
+        "summary": "Built accessible fictional product interfaces.",
+        "position": 0,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def create_experience_entry(draft, **overrides):
+    DraftExperienceEntry = apps.get_model("applications.DraftExperienceEntry")
+    payload = {
+        "draft": draft,
+        "organization": "Example Studio",
+        "role_title": "Frontend Developer",
+        "start_month": date(2024, 1, 1),
+        "end_month": None,
+        "is_current": True,
+        "summary": "Built accessible fictional product interfaces.",
+        "position": 0,
+    }
+    payload.update(overrides)
+    return DraftExperienceEntry.objects.create(**payload)
+
+
+def post_experience_entry(
+    client,
+    draft_id,
+    payload,
+    token,
+    *,
+    version=1,
+    content_type="application/json",
+):
+    return client.post(
+        f"/api/v1/application-drafts/{draft_id}/experiences/",
+        payload,
+        content_type=content_type,
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH=f'"draft-{version}"',
+    )
+
+
+def patch_experience_entry(client, draft_id, experience_id, payload, token, *, version=1):
+    return client.patch(
+        f"/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/",
+        payload,
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH=f'"draft-{version}"',
+    )
+
+
+def delete_experience_entry(client, draft_id, experience_id, token, *, version=1):
+    return client.delete(
+        f"/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/",
         HTTP_X_CSRFTOKEN=token,
         HTTP_IF_MATCH=f'"draft-{version}"',
     )
@@ -1268,4 +1334,600 @@ def test_patch_failure_responses_and_logs_exclude_candidate_values(vacancy, capl
         assert value not in stale_conflict.content.decode()
         assert value not in authorization_failure.content.decode()
         assert value not in csrf_failure.content.decode()
+        assert value not in caplog.text
+
+
+@pytest.mark.django_db
+def test_draft_aggregate_serializes_empty_and_ordered_experience_entries(vacancy, another_vacancy):
+    client, token = csrf_client()
+    first_create = create_draft(client, vacancy, token)
+    first = apps.get_model("applications.ApplicationDraft").objects.get(vacancy=vacancy)
+    second = apps.get_model("applications.ApplicationDraft")(
+        vacancy=another_vacancy,
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+    second_credential = generate_credential(second)
+    second.save()
+    create_experience_entry(
+        first,
+        position=4,
+        organization="Zeta Labs",
+        role_title="Lead Engineer",
+        start_month=date(2024, 5, 1),
+    )
+    create_experience_entry(
+        first,
+        position=0,
+        organization="Acme Studio",
+        role_title="Product Designer",
+        start_month=date(2022, 3, 1),
+        end_month=date(2023, 8, 1),
+        is_current=False,
+        summary="Shipped fictional platform improvements.",
+    )
+    create_experience_entry(
+        second,
+        position=0,
+        organization="Hidden Org",
+        role_title="Hidden Role",
+    )
+
+    initial_entries = first_create.json()["draft"]["experience_entries"]
+    response = client.get(f"/api/v1/application-drafts/{first.pk}/")
+
+    assert initial_entries == []
+    assert response.status_code == 200
+    assert response["ETag"] == '"draft-1"'
+    entries = response.json()["draft"]["experience_entries"]
+    assert [entry["position"] for entry in entries] == [0, 4]
+    assert entries[0] == {
+        "id": str(first.experience_entries.get(position=0).pk),
+        "organization": "Acme Studio",
+        "role_title": "Product Designer",
+        "start_month": "2022-03",
+        "end_month": "2023-08",
+        "is_current": False,
+        "summary": "Shipped fictional platform improvements.",
+        "position": 0,
+    }
+    assert "created_at" not in entries[0]
+    assert "updated_at" not in entries[0]
+    assert all(entry["organization"] != "Hidden Org" for entry in entries)
+    assert second_credential not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_experience_entry_create_accepts_current_and_completed_roles_and_renews_cookie(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    credential = created.cookies["applyflow_draft"].value
+
+    current = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(organization="株式会社Example", summary=""),
+        token,
+    )
+    completed = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(
+            organization="Example Archive",
+            role_title="Designer",
+            start_month="2020-02",
+            end_month="2021-11",
+            is_current=False,
+            summary="Handled multilingual fictional experiences.",
+            position=4,
+        ),
+        token,
+        version=2,
+    )
+
+    draft.refresh_from_db()
+    assert current.status_code == 201
+    assert current["ETag"] == '"draft-2"'
+    assert current.cookies["applyflow_draft"].value == credential
+    assert current.json()["draft"]["experience_entries"][0]["organization"] == "株式会社Example"
+    assert completed.status_code == 201
+    assert completed["ETag"] == '"draft-3"'
+    assert completed.cookies["applyflow_draft"].value == credential
+    assert [entry["position"] for entry in completed.json()["draft"]["experience_entries"]] == [
+        0,
+        4,
+    ]
+    assert draft.version == 3
+
+
+@pytest.mark.django_db
+def test_experience_entry_create_enforces_cap_duplicate_position_and_validation(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    duplicate = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(position=0, organization="First"),
+        token,
+    )
+    duplicate_again = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(position=0, organization="Collision"),
+        token,
+        version=2,
+    )
+    invalid_position = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(position=True),
+        token,
+        version=2,
+    )
+    invalid_month = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(position=3, start_month="2024-13"),
+        token,
+        version=2,
+    )
+
+    assert duplicate.status_code == 201
+    assert_validation_error(duplicate_again, "position")
+    assert_validation_error(invalid_position, "position")
+    assert_validation_error(invalid_month, "start_month")
+
+    for position in range(1, 5):
+        response = post_experience_entry(
+            client,
+            draft.pk,
+            experience_entry_payload(position=position, organization=f"Example {position}"),
+            token,
+            version=position + 1,
+        )
+        assert response.status_code == 201
+
+    sixth = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(position=4, organization="Overflow"),
+        token,
+        version=6,
+    )
+
+    assert_validation_error(sixth, "non_field_errors", "position")
+    draft.refresh_from_db()
+    assert draft.version == 6
+    assert draft.experience_entries.count() == 5
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        (experience_entry_payload(organization="   "), "organization"),
+        (experience_entry_payload(role_title="x" * 161), "role_title"),
+        (experience_entry_payload(summary="x" * 601), "summary"),
+        (experience_entry_payload(summary="unsafe\x00summary"), "summary"),
+        (experience_entry_payload(start_month="2024-1"), "start_month"),
+        (experience_entry_payload(start_month=" 2024-01"), "start_month"),
+        (experience_entry_payload(start_month="２０２４-01"), "start_month"),
+        (experience_entry_payload(is_current=True, end_month="2024-02"), "end_month"),
+        (experience_entry_payload(is_current=False, end_month=None), "end_month"),
+        (
+            experience_entry_payload(
+                is_current=False,
+                start_month="2024-04",
+                end_month="2024-03",
+            ),
+            "end_month",
+        ),
+        (
+            {
+                "organization": "Only one field",
+                "start_month": "2024-01",
+                "is_current": True,
+                "position": 0,
+            },
+            "role_title",
+        ),
+    ],
+)
+def test_experience_entry_create_rejects_invalid_payload_shapes(vacancy, payload, field):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    response = post_experience_entry(client, draft.pk, payload, token)
+
+    assert_validation_error(response, field)
+    assert "applyflow_draft" not in response.cookies
+    draft.refresh_from_db()
+    assert draft.version == 1
+    assert draft.experience_entries.count() == 0
+
+
+@pytest.mark.django_db
+def test_experience_entry_create_requires_json_object_csrf_and_current_version(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    path = f"/api/v1/application-drafts/{draft.pk}/experiences/"
+
+    missing_csrf = client.post(path, experience_entry_payload(), content_type="application/json")
+    missing_version = client.post(
+        path,
+        experience_entry_payload(),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+    )
+    malformed_version = client.post(
+        path,
+        experience_entry_payload(),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH="draft-1",
+    )
+    non_object = client.post(
+        path,
+        data=json.dumps([]),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+    unsupported = client.post(
+        path,
+        data="organization=Example Studio",
+        content_type="text/plain",
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_error(missing_csrf, 403, "csrf_failed")
+    assert_error(missing_version, 428, "draft_version_required")
+    assert_error(malformed_version, 428, "draft_version_required")
+    assert_validation_error(non_object, "non_field_errors")
+    assert unsupported.status_code == 415
+    draft.refresh_from_db()
+    assert draft.version == 1
+    assert draft.experience_entries.count() == 0
+
+
+@pytest.mark.django_db
+def test_experience_entry_update_uses_merged_state_preserves_fields_and_rolls_back_collisions(
+    vacancy,
+):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    first = create_experience_entry(
+        draft,
+        position=0,
+        organization="First Org",
+        role_title="Engineer",
+        summary="Initial summary",
+    )
+    second = create_experience_entry(
+        draft,
+        position=1,
+        organization="Second Org",
+        role_title="Designer",
+        start_month=date(2021, 2, 1),
+    )
+
+    update = patch_experience_entry(
+        client,
+        draft.pk,
+        first.pk,
+        {"summary": "", "role_title": "Staff Engineer"},
+        token,
+    )
+    invalid_partial = patch_experience_entry(
+        client,
+        draft.pk,
+        first.pk,
+        {"is_current": False},
+        token,
+        version=2,
+    )
+    collision = patch_experience_entry(
+        client,
+        draft.pk,
+        first.pk,
+        {"position": 1},
+        token,
+        version=2,
+    )
+    complete_role = patch_experience_entry(
+        client,
+        draft.pk,
+        first.pk,
+        {"is_current": False, "end_month": "2024-06"},
+        token,
+        version=2,
+    )
+    current_role = patch_experience_entry(
+        client,
+        draft.pk,
+        second.pk,
+        {"is_current": True, "end_month": None},
+        token,
+        version=3,
+    )
+
+    first.refresh_from_db()
+    second.refresh_from_db()
+    draft.refresh_from_db()
+    assert update.status_code == 200
+    assert update.json()["draft"]["experience_entries"][0]["summary"] == ""
+    assert_validation_error(invalid_partial, "end_month")
+    assert_validation_error(collision, "position")
+    assert "applyflow_draft" not in invalid_partial.cookies
+    assert "applyflow_draft" not in collision.cookies
+    assert complete_role.status_code == 200
+    assert current_role.status_code == 200
+    assert first.role_title == "Staff Engineer"
+    assert first.end_month == date(2024, 6, 1)
+    assert first.is_current is False
+    assert second.is_current is True
+    assert second.end_month is None
+    assert draft.version == 4
+
+
+@pytest.mark.django_db
+def test_experience_entry_update_requires_authorized_child_and_current_version(
+    vacancy,
+    another_vacancy,
+):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get(vacancy=vacancy)
+    entry = create_experience_entry(draft)
+    foreign_draft = apps.get_model("applications.ApplicationDraft")(
+        vacancy=another_vacancy,
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+    foreign_credential = generate_credential(foreign_draft)
+    foreign_draft.save()
+    foreign_entry = create_experience_entry(foreign_draft)
+
+    stale = patch_experience_entry(
+        client,
+        draft.pk,
+        entry.pk,
+        {"organization": "Stale"},
+        token,
+        version=2,
+    )
+    missing_ownership = Client(enforce_csrf_checks=True)
+    missing_ownership.cookies["csrftoken"] = client.cookies["csrftoken"].value
+    missing = patch_experience_entry(
+        missing_ownership,
+        draft.pk,
+        entry.pk,
+        {"organization": "Missing"},
+        token,
+    )
+    client.cookies["applyflow_draft"] = foreign_credential
+    foreign_parent = patch_experience_entry(
+        client,
+        draft.pk,
+        entry.pk,
+        {"organization": "Forbidden"},
+        token,
+    )
+    client.cookies["applyflow_draft"] = client.cookies["applyflow_draft"] = foreign_credential
+    foreign_child = patch_experience_entry(
+        client,
+        foreign_draft.pk,
+        entry.pk,
+        {"organization": "Forbidden"},
+        token,
+        version=1,
+    )
+    missing_child = patch_experience_entry(
+        client,
+        foreign_draft.pk,
+        uuid.uuid4(),
+        {"organization": "Missing"},
+        token,
+        version=1,
+    )
+
+    assert_error(stale, 409, "draft_conflict")
+    assert_error(missing, 404, "draft_unavailable")
+    assert_error(foreign_parent, 404, "draft_unavailable")
+    assert_error(foreign_child, 404, "draft_unavailable")
+    assert_error(missing_child, 404, "draft_unavailable")
+    draft.refresh_from_db()
+    foreign_draft.refresh_from_db()
+    entry.refresh_from_db()
+    foreign_entry.refresh_from_db()
+    assert entry.organization == "Example Studio"
+    assert foreign_entry.organization == "Example Studio"
+    assert draft.version == foreign_draft.version == 1
+
+
+@pytest.mark.django_db
+def test_experience_entry_delete_removes_only_target_and_keeps_position_gaps(vacancy):
+    client, token = csrf_client()
+    created = create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    credential = created.cookies["applyflow_draft"].value
+    first = create_experience_entry(draft, position=0, organization="Keep")
+    second = create_experience_entry(draft, position=4, organization="Remove")
+
+    response = delete_experience_entry(client, draft.pk, second.pk, token)
+    repeat = delete_experience_entry(client, draft.pk, second.pk, token, version=2)
+
+    draft.refresh_from_db()
+    first.refresh_from_db()
+    assert response.status_code == 204
+    assert response.content == b""
+    assert response["ETag"] == '"draft-2"'
+    assert response["Cache-Control"] == "no-store"
+    assert response.cookies["applyflow_draft"].value == credential
+    assert_error(repeat, 404, "draft_unavailable")
+    assert "applyflow_draft" not in repeat.cookies
+    assert draft.version == 2
+    assert list(draft.experience_entries.values_list("position", flat=True)) == [0]
+    assert first.organization == "Keep"
+
+
+@pytest.mark.django_db
+def test_experience_entry_endpoints_reject_unsupported_methods(vacancy):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    entry = create_experience_entry(draft)
+    collection_path = f"/api/v1/application-drafts/{draft.pk}/experiences/"
+    detail_path = f"/api/v1/application-drafts/{draft.pk}/experiences/{entry.pk}/"
+
+    for method in ("get", "patch", "put", "delete"):
+        response = getattr(client, method)(collection_path, HTTP_X_CSRFTOKEN=token)
+        assert response.status_code == 405
+        assert response["Cache-Control"] == "no-store"
+    for method in ("get", "post", "put"):
+        response = getattr(client, method)(detail_path, HTTP_X_CSRFTOKEN=token)
+        assert response.status_code == 405
+        assert response["Cache-Control"] == "no-store"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("operation", ["post", "patch", "delete"])
+@pytest.mark.parametrize(
+    "unavailable",
+    ["missing", "malformed", "wrong", "revoked", "expired", "abandoned", "submitted"],
+)
+def test_experience_entry_mutations_require_current_ownership(vacancy, operation, unavailable):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    entry = create_experience_entry(draft)
+
+    if unavailable == "missing":
+        client.cookies.pop("applyflow_draft")
+    elif unavailable == "malformed":
+        client.cookies["applyflow_draft"] = "malformed"
+    elif unavailable == "wrong":
+        client.cookies["applyflow_draft"] = f"v1.{draft.pk}.{'a' * 43}"
+    elif unavailable == "revoked":
+        draft.credential_revoked_at = timezone.now()
+        draft.save(update_fields=["credential_revoked_at"])
+    elif unavailable == "expired":
+        draft.expires_at = timezone.now() - timedelta(seconds=1)
+        draft.save(update_fields=["expires_at"])
+    elif unavailable == "abandoned":
+        draft.status = draft.Status.ABANDONED
+        draft.save(update_fields=["status"])
+    else:
+        draft.status = draft.Status.SUBMITTED
+        draft.submitted_at = timezone.now()
+        draft.save(update_fields=["status", "submitted_at"])
+
+    if operation == "post":
+        response = post_experience_entry(
+            client,
+            draft.pk,
+            experience_entry_payload(position=4),
+            token,
+        )
+    elif operation == "patch":
+        response = patch_experience_entry(
+            client,
+            draft.pk,
+            entry.pk,
+            {"organization": "Blocked"},
+            token,
+        )
+    else:
+        response = delete_experience_entry(client, draft.pk, entry.pk, token)
+
+    assert_error(response, 404, "draft_unavailable")
+    draft.refresh_from_db()
+    assert draft.version == 1
+    assert draft.experience_entries.count() == 1
+
+
+@pytest.mark.django_db
+def test_experience_entry_duplicate_and_excessive_cookies_fail_generically(
+    vacancy,
+    another_vacancy,
+):
+    client, token = csrf_client()
+    first_response = create_draft(client, vacancy, token)
+    first = apps.get_model("applications.ApplicationDraft").objects.get(vacancy=vacancy)
+    first_credential = first_response.cookies["applyflow_draft"].value
+    second = apps.get_model("applications.ApplicationDraft")(
+        vacancy=another_vacancy,
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+    second_credential = generate_credential(second)
+    second.save()
+    entry = create_experience_entry(first)
+    csrf_cookie = client.cookies["csrftoken"].value
+
+    ambiguous = client.patch(
+        f"/api/v1/application-drafts/{first.pk}/experiences/{entry.pk}/",
+        {"organization": "Blocked"},
+        content_type="application/json",
+        HTTP_COOKIE=(
+            f"csrftoken={csrf_cookie}; applyflow_draft={first_credential}; "
+            f"applyflow_draft={second_credential}"
+        ),
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+    excessive = client.post(
+        f"/api/v1/application-drafts/{first.pk}/experiences/",
+        experience_entry_payload(position=4),
+        content_type="application/json",
+        HTTP_COOKIE=(
+            f"csrftoken={csrf_cookie}; applyflow_draft={first_credential}; "
+            "applyflow_draft=x; applyflow_draft=x; applyflow_draft=x; applyflow_draft=x"
+        ),
+        HTTP_X_CSRFTOKEN=token,
+        HTTP_IF_MATCH='"draft-1"',
+    )
+
+    assert_error(ambiguous, 404, "draft_unavailable")
+    assert_error(excessive, 404, "draft_unavailable")
+    assert first_credential not in ambiguous.content.decode()
+    assert first_credential not in excessive.content.decode()
+
+
+@pytest.mark.django_db
+def test_experience_entry_logs_and_failure_responses_exclude_private_values(vacancy, caplog):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    entry = create_experience_entry(draft)
+    private_org = "Private Fictional Org"
+    private_summary = "Private multiline\nsummary value"
+
+    created = post_experience_entry(
+        client,
+        draft.pk,
+        experience_entry_payload(
+            organization=private_org,
+            position=4,
+            summary=private_summary,
+        ),
+        token,
+    )
+    invalid = patch_experience_entry(
+        client,
+        draft.pk,
+        entry.pk,
+        {"organization": "unsafe\x00value"},
+        token,
+        version=2,
+    )
+
+    assert created.status_code == 201
+    assert_validation_error(invalid, "organization")
+    for value in (private_org, private_summary, "unsafe\x00value"):
+        assert value not in invalid.content.decode(errors="ignore")
         assert value not in caplog.text

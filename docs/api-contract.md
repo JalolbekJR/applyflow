@@ -113,7 +113,18 @@ A successful create, resolve, or read returns the same aggregate shape:
       "consent_acknowledged": true,
       "consent_version": "privacy-v1"
     },
-    "experience_entries": [],
+    "experience_entries": [
+      {
+        "id": "38e7a7ce-1c4f-4861-b61d-a69a0a513312",
+        "organization": "Example Studio",
+        "role_title": "Frontend Developer",
+        "start_month": "2024-01",
+        "end_month": null,
+        "is_current": true,
+        "summary": "Built accessible fictional product interfaces.",
+        "position": 0
+      }
+    ],
     "document": {
       "original_name_display": "avery-example-cv.pdf",
       "detected_content_type": "application/pdf",

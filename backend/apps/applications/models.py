@@ -134,12 +134,54 @@ class ApplicationDraft(CandidateFields):
         now = now or timezone.now()
         self.status = self.Status.ABANDONED
         self.revoke_credential(now=now)
+        if self.pk:
+            self.experience_entries.all().delete()
         self.record_successful_mutation(now=now)
 
     def expire(self, *, now=None) -> None:
         now = now or timezone.now()
         self.status = self.Status.EXPIRED
         self.revoke_credential(now=now)
+        if self.pk:
+            self.experience_entries.all().delete()
+
+
+class DraftExperienceEntry(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    draft = models.ForeignKey(
+        ApplicationDraft,
+        on_delete=models.CASCADE,
+        related_name="experience_entries",
+    )
+    organization = models.CharField(max_length=160)
+    role_title = models.CharField(max_length=160)
+    start_month = models.DateField()
+    end_month = models.DateField(null=True, blank=True)
+    is_current = models.BooleanField(default=False)
+    summary = models.TextField(max_length=600, blank=True)
+    position = models.PositiveSmallIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("position", "created_at", "id")
+        indexes = [
+            models.Index(fields=("draft", "position"), name="draft_exp_entry_order_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("draft", "position"),
+                name="uniq_draft_experience_position",
+            ),
+            models.CheckConstraint(
+                condition=(Q(is_current=True) & Q(end_month__isnull=True))
+                | (Q(is_current=False) & Q(end_month__isnull=False)),
+                name="draft_exp_current_end_consistent",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.organization} - {self.role_title}"
 
 
 class Application(CandidateFields):

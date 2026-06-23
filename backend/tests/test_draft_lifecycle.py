@@ -1,11 +1,13 @@
 import base64
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
 from django.apps import apps
 from django.contrib.auth.hashers import identify_hasher, make_password
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
 from django.test import override_settings
 from django.utils import timezone
 
@@ -48,6 +50,22 @@ def create_draft(vacancy, *, now=None):
     )
     draft.refresh_from_db()
     return draft
+
+
+def create_experience_entry(draft, **overrides):
+    DraftExperienceEntry = apps.get_model("applications.DraftExperienceEntry")
+    payload = {
+        "draft": draft,
+        "organization": "Example Studio",
+        "role_title": "Frontend Developer",
+        "start_month": date(2024, 1, 1),
+        "end_month": None,
+        "is_current": True,
+        "summary": "Built calm fictional candidate journeys.",
+        "position": 0,
+    }
+    payload.update(overrides)
+    return DraftExperienceEntry.objects.create(**payload)
 
 
 @pytest.mark.django_db
@@ -123,6 +141,7 @@ def test_successful_mutation_cannot_extend_past_vacancy_deadline(vacancy):
 @pytest.mark.django_db
 def test_abandonment_revokes_credential_and_increments_once(vacancy):
     draft = create_draft(vacancy)
+    entry = create_experience_entry(draft)
     now = timezone.now()
 
     draft.abandon(now=now)
@@ -132,6 +151,89 @@ def test_abandonment_revokes_credential_and_increments_once(vacancy):
     assert draft.last_activity_at == now
     assert draft.version == 2
     assert draft.is_active(now=now) is False
+    assert (
+        not apps.get_model("applications.DraftExperienceEntry").objects.filter(pk=entry.pk).exists()
+    )
+
+
+@pytest.mark.django_db
+def test_draft_experience_entry_has_uuid_identity_ordering_and_cascade(vacancy):
+    draft = create_draft(vacancy)
+    first = create_experience_entry(draft, position=1, organization="Second", role_title="Later")
+    second = create_experience_entry(
+        draft,
+        position=0,
+        organization="First",
+        role_title="Earlier",
+        start_month=date(2023, 1, 1),
+    )
+    DraftExperienceEntry = apps.get_model("applications.DraftExperienceEntry")
+
+    ordered = list(DraftExperienceEntry.objects.filter(draft=draft))
+
+    assert isinstance(first.pk, uuid.UUID)
+    assert isinstance(second.pk, uuid.UUID)
+    assert ordered == [second, first]
+
+    draft.delete()
+    assert DraftExperienceEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_draft_experience_entry_constraints_protect_position_and_current_end_consistency(vacancy):
+    draft = create_draft(vacancy)
+    create_experience_entry(draft, position=0)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        create_experience_entry(draft, position=0, organization="Collision")
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        create_experience_entry(
+            draft,
+            position=1,
+            is_current=True,
+            end_month=date(2024, 2, 1),
+        )
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        create_experience_entry(
+            draft,
+            position=1,
+            is_current=False,
+            end_month=None,
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_draft_experience_entry_migration_is_reversible_and_drift_free():
+    previous = [("applications", "0002_applicationdraft_credential_revoked_at_and_more")]
+    current = [("applications", "0003_draftexperienceentry")]
+    executor = MigrationExecutor(connection)
+
+    executor.migrate(previous)
+    state = executor.loader.project_state(previous).apps
+    with pytest.raises(LookupError):
+        state.get_model("applications", "DraftExperienceEntry")
+
+    executor.loader.build_graph()
+    executor.migrate(current)
+    state = executor.loader.project_state(current).apps
+    DraftExperienceEntry = state.get_model("applications", "DraftExperienceEntry")
+    constraint_names = {constraint.name for constraint in DraftExperienceEntry._meta.constraints}
+    index_names = {index.name for index in DraftExperienceEntry._meta.indexes}
+    assert constraint_names == {
+        "uniq_draft_experience_position",
+        "draft_exp_current_end_consistent",
+    }
+    assert index_names == {"draft_exp_entry_order_idx"}
+
+    executor.loader.build_graph()
+    executor.migrate(previous)
+    state = executor.loader.project_state(previous).apps
+    with pytest.raises(LookupError):
+        state.get_model("applications", "DraftExperienceEntry")
+
+    executor.loader.build_graph()
+    executor.migrate(executor.loader.graph.leaf_nodes())
 
 
 @pytest.mark.django_db

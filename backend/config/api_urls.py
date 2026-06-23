@@ -5,6 +5,8 @@ from apps.applications.views import (
     CandidatePatchView,
     DraftCollectionView,
     DraftDetailView,
+    ExperienceEntryCollectionView,
+    ExperienceEntryDetailView,
     ExperiencePatchView,
 )
 from apps.vacancies.views import VacancyDetailView, VacancyListView
@@ -32,6 +34,16 @@ urlpatterns = [
         "application-drafts/<uuid:draft_id>/experience/",
         ExperiencePatchView.as_view(),
         name="draft-experience",
+    ),
+    path(
+        "application-drafts/<uuid:draft_id>/experiences/",
+        ExperienceEntryCollectionView.as_view(),
+        name="draft-experience-entry-collection",
+    ),
+    path(
+        "application-drafts/<uuid:draft_id>/experiences/<uuid:experience_id>/",
+        ExperienceEntryDetailView.as_view(),
+        name="draft-experience-entry-detail",
     ),
     path("vacancies/", VacancyListView.as_view(), name="vacancy-list"),
     path("vacancies/<slug:slug>/", VacancyDetailView.as_view(), name="vacancy-detail"),

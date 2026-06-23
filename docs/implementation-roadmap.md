@@ -90,8 +90,9 @@ Production database or migration actions require separate approval.
 
 ## Phase 3 - Secure Drafts And Private CV Upload
 
-Status: in progress. Slice 1 ownership/lifecycle and Slice 2 draft API are implemented in the
-backend foundation. Phase 3 overall remains in progress.
+Status: in progress. Slice 1 ownership/lifecycle, Slice 2 draft API, and Slice 3 backend
+experience-entry persistence are implemented in the backend foundation. Phase 3 overall remains in
+progress.
 
 Objective: replace in-memory fixture draft persistence with authorized, expiring server-side drafts,
 bounded employment entries, and private PDF upload/metadata/replacement/deletion while preserving
@@ -128,7 +129,6 @@ Accepted planning decisions:
 
 Still deferred:
 
-- Experience-entry persistence and CRUD.
 - Private storage, CV upload, document mutation APIs, and cleanup.
 - Frontend integration with the draft API.
 - Submission, deployment, monitoring, and PostgreSQL runtime verification.
@@ -142,7 +142,7 @@ names the preferred model for implementation support, not permission to begin wo
 | --- | --- | --- | --- | --- | --- |
 | 1. Ownership and lifecycle | Cookie helpers, CSRF bootstrap, credential verification, draft version/activity/revocation, seven-day inactivity plus thirty-day absolute expiry, deadline bound, and generic unavailable behavior. | Phase 2 models and ADRs 0004/0009. | GPT-5.5 | High; authorization and lifecycle edge cases are security-critical. | Model/service tests, CSRF enforcement, cookie-attribute assertions, cross-draft/cross-vacancy tests, Django checks. |
 | 2. Draft API | Create/resolve/read, candidate and experience-summary PATCH, API error/request-ID integration, no-store responses. | Slice 1. | GPT-5.5 | High; every endpoint must preserve enumeration-safe authorization. | API matrix, stale-version conflicts, validation mapping, unsupported methods, lint/format/tests. |
-| 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, parent-version increments, frontend types/service contracts. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests. |
+| 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, and parent-version increments. Frontend integration remains part of Slice 7. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests when integration begins. |
 | 4. Private storage abstraction | Provider-neutral interface, private local adapter, ignored root, fake/test adapter, configuration validation. | Slice 1. | GPT-5.5 | High; storage-path and privacy boundaries must be exact. | Traversal/key tests, no public route, adapter contract tests, configuration checks. |
 | 5. Upload validation | Size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, and strict `pypdf` validation. | Slice 4 and the approved parser family, with the exact reviewed version pinned before code changes. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
 | 6. Document mutation API | Singleton CV create/read/replace/delete, compensation, row locks, active uniqueness, and retryable deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, race/conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests. |

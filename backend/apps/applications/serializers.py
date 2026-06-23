@@ -1,5 +1,6 @@
 import re
 import unicodedata
+from datetime import date
 from urllib.parse import urlsplit
 
 from rest_framework import serializers
@@ -7,6 +8,7 @@ from rest_framework import serializers
 from .models import CandidateFields
 
 PHONE_PATTERN = re.compile(r"^[+()\d \-]{7,30}$")
+MONTH_PATTERN = re.compile(r"^(?P<year>[0-9]{4})-(?P<month>0[1-9]|1[0-2])$")
 MAX_SKILL_LENGTH = 80
 
 
@@ -23,6 +25,39 @@ class StrictBooleanField(serializers.BooleanField):
         if type(data) is not bool:
             self.fail("invalid")
         return data
+
+
+class StrictIntegerField(serializers.IntegerField):
+    def to_internal_value(self, data):
+        if type(data) is not int:
+            self.fail("invalid")
+        return super().to_internal_value(data)
+
+
+class StrictStringField(serializers.CharField):
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            self.fail("invalid")
+        return super().to_internal_value(data)
+
+
+class StrictMonthField(serializers.Field):
+    default_error_messages = {
+        "invalid": "Enter a month in YYYY-MM format.",
+    }
+
+    def to_internal_value(self, data):
+        if not isinstance(data, str) or not data.isascii():
+            self.fail("invalid")
+        match = MONTH_PATTERN.fullmatch(data)
+        if match is None:
+            self.fail("invalid")
+        return date(int(match.group("year")), int(match.group("month")), 1)
+
+    def to_representation(self, value):
+        if value is None:
+            return None
+        return value.strftime("%Y-%m")
 
 
 class DraftSectionSerializer(serializers.Serializer):
@@ -154,6 +189,97 @@ class ExperiencePatchSerializer(DraftSectionSerializer):
         return value
 
 
+class DraftExperienceEntrySerializer(DraftSectionSerializer):
+    organization = StrictStringField(required=False, max_length=160, trim_whitespace=False)
+    role_title = StrictStringField(required=False, max_length=160, trim_whitespace=False)
+    start_month = StrictMonthField(required=False)
+    end_month = StrictMonthField(required=False, allow_null=True)
+    is_current = StrictBooleanField(required=False)
+    summary = StrictStringField(
+        required=False,
+        allow_blank=True,
+        max_length=600,
+        trim_whitespace=False,
+    )
+    position = StrictIntegerField(required=False, min_value=0, max_value=4)
+
+    def validate_organization(self, value):
+        if has_disallowed_control(value):
+            raise serializers.ValidationError("Enter an organization without control characters.")
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_role_title(self, value):
+        if has_disallowed_control(value):
+            raise serializers.ValidationError("Enter a role title without control characters.")
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError("This field may not be blank.")
+        return value
+
+    def validate_summary(self, value):
+        if has_disallowed_control(value, allow_line_breaks=True):
+            raise serializers.ValidationError("Use plain text with normal line breaks.")
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+
+        def merged_value(name):
+            if name in attrs:
+                return attrs[name]
+            if instance is not None:
+                return getattr(instance, name)
+            return None
+
+        errors = {}
+        for name in ("organization", "role_title", "start_month", "is_current", "position"):
+            if merged_value(name) is None:
+                errors[name] = ["This field is required."]
+
+        start_month = merged_value("start_month")
+        end_month = merged_value("end_month")
+        is_current = merged_value("is_current")
+        if is_current is True and end_month is not None:
+            errors["end_month"] = ["Clear the end month for a current role."]
+        if is_current is False and end_month is None:
+            errors["end_month"] = ["Add an end month for a completed role."]
+        if start_month is not None and end_month is not None and end_month < start_month:
+            errors["end_month"] = [
+                "Choose an end month that is the same as or after the start month."
+            ]
+
+        draft = self.context.get("draft")
+        position = merged_value("position")
+        if draft is not None and position is not None:
+            siblings = draft.experience_entries.all()
+            if instance is not None:
+                siblings = siblings.exclude(pk=instance.pk)
+            if siblings.filter(position=position).exists():
+                errors["position"] = ["Choose a unique position from 0 to 4."]
+            if instance is None and draft.experience_entries.count() >= 5:
+                errors["non_field_errors"] = ["You can add up to five employment entries."]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+
+def public_experience_entry(entry):
+    return {
+        "id": entry.pk,
+        "organization": entry.organization,
+        "role_title": entry.role_title,
+        "start_month": StrictMonthField().to_representation(entry.start_month),
+        "end_month": StrictMonthField().to_representation(entry.end_month),
+        "is_current": entry.is_current,
+        "summary": entry.summary,
+        "position": entry.position,
+    }
+
+
 def public_draft(draft):
     document = draft.documents.filter(deleted_at__isnull=True).first()
     document_payload = None
@@ -185,7 +311,9 @@ def public_draft(draft):
                 "consent_acknowledged": draft.consent_acknowledged,
                 "consent_version": draft.consent_version,
             },
-            "experience_entries": [],
+            "experience_entries": [
+                public_experience_entry(entry) for entry in draft.experience_entries.all()
+            ],
             "document": document_payload,
             "last_activity_at": draft.last_activity_at,
             "expires_at": draft.expires_at,

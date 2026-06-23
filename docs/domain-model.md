@@ -1,11 +1,10 @@
 # Domain Model
 
 Phase 2 implements vacancy, application draft, submitted application, and document-metadata models
-with UUID identifiers. Phase 3 plans the smallest schema additions needed for lifecycle activity,
-optimistic mutation conflicts, bounded employment entries, and retryable physical document
-deletion. No migration is created by this plan.
+with UUID identifiers. Phase 3 adds lifecycle activity, optimistic mutation conflicts, and bounded
+employment entries. Private-document storage lifecycle work remains a later slice.
 
-## Planned Phase 3 Diagram
+## Phase 3 Diagram
 
 ```mermaid
 erDiagram
@@ -88,7 +87,7 @@ Existing status values remain:
 The existing `draft_submitted_at_matches_status` constraint remains. Services also enforce allowed
 transitions because check constraints alone cannot express the complete lifecycle.
 
-## Proposed Database Changes
+## Database Changes
 
 ### ApplicationDraft Additions
 
@@ -106,7 +105,7 @@ of `last_activity_at + 7 days`, `created_at + 30 days`, and the related vacancy 
 not renew it. Database checks cannot safely compare against the current clock, so expiry is
 enforced by authorization and cleanup services rather than a `NOW()` check constraint.
 
-### New DraftExperienceEntry
+### DraftExperienceEntry
 
 Phase 3 explicitly requires create, update, and delete operations for employment entries. Add one
 focused child model in `applications`; do not add employer, skill taxonomy, or resume-builder
@@ -166,20 +165,18 @@ Keep the existing exact-one-owner and one-active-document-per-owner constraints.
 - After physical deletion, cleanup hard-deletes the revoked draft shell and document metadata.
 - Submitted-state immutability and experience transfer are not implemented until Phase 4.
 
-## Migration Plan
+## Migration Status
 
-Implementation should create reviewable migrations in this order after approval:
+Implemented migrations:
 
-1. Add draft lifecycle/version fields with safe defaults and a data migration that sets
+1. Draft lifecycle/version fields with safe defaults and a data migration that sets
    `last_activity_at` from `updated_at` for existing fictional records.
-2. Add `DraftExperienceEntry` and its ordering/current-role constraints.
-3. Add document checksum and physical-deletion tracking with `sha256` nullable in the first
-   migration. Service-layer creation must require checksums for new uploads, and old fictional
-   metadata must remain null rather than receiving a fabricated checksum.
-4. Verify migration reversibility and generated SQL. Run SQLite checks locally and inspect
-   PostgreSQL SQL/constraints before any real database action.
+2. `DraftExperienceEntry` with ordering and current-role constraints.
 
-This plan does not create or apply migrations. Production data migration remains approval-gated.
+Still deferred:
+
+1. Document checksum and physical-deletion tracking.
+2. PostgreSQL-only concurrency and SQL verification before any production-readiness claim.
 
 ## Deferred Schema Decisions
 
