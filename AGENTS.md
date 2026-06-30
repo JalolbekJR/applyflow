@@ -1,8 +1,9 @@
 # ApplyFlow Development Contract
 
-ApplyFlow is currently in Phase 2: Django backend foundation. Phase 1 delivered the candidate-facing
-Nuxt frontend, which still uses fixtures and simulated services. The backend now provides schema,
-admin, health, and read-only vacancy foundations but is not integrated with the frontend.
+ApplyFlow is currently in Phase 3: secure drafts, private CV upload, and frontend integration.
+The frontend now uses real vacancy, draft, experience, employment-entry, CV, conflict, and
+abandonment APIs. Final submission, private status lookup, cleanup scheduling, PostgreSQL runtime
+validation, deployment, CI, monitoring, and backups remain future work.
 
 ## Before Editing
 
@@ -15,13 +16,15 @@ admin, health, and read-only vacancy foundations but is not integrated with the 
 
 ## Phase Boundary
 
-Phase 2 allows Django and DRF configuration, PostgreSQL-ready settings, domain models, migrations,
-Django Admin registration, read-only vacancy APIs, backend tests, and directly affected
-documentation.
+Phase 3 allows same-origin Nuxt-to-Django integration, anonymous draft API usage, CSRF bootstrap,
+candidate and experience persistence, employment-entry CRUD, private singleton CV
+metadata/upload/replacement/deletion, conflict handling, abandonment, directly affected tests, and
+directly affected documentation.
 
-Do not add candidate authentication, draft authorization workflows, CV upload or storage, frontend
-API integration, Docker, CI, deployment, monitoring, or production infrastructure during this
-phase. Figma work remains deferred while the connected plan prevents useful canvas operations.
+Do not add real final submission, real private status lookup, candidate accounts, cleanup scheduling,
+PostgreSQL service setup, Docker, CI, deployment, monitoring, backups, or production infrastructure
+during this phase. Figma work remains deferred while the connected plan prevents useful canvas
+operations.
 
 ## Development Rules
 
@@ -29,11 +32,13 @@ phase. Figma work remains deferred while the connected plan prevents useful canv
 - Explain every dependency addition before making it.
 - Add or update tests when behavior changes.
 - Keep route pages focused and components responsibility-specific.
-- Keep fixture-backed save, upload, submission, and status behavior clearly labeled as simulated.
+- Keep implemented vacancy, draft, experience, entry, CV, and abandonment behavior backed by real
+  APIs; keep final submission and status lookup clearly disabled or deferred.
 - Implement loading, empty, error, unavailable, and success states where the workflow needs them.
 - Preserve semantic HTML, keyboard behavior, visible focus, reduced motion, and mobile reflow.
 - Treat client validation as user feedback, never as a security boundary.
-- Treat uploaded files as hostile input in the planned backend.
+- Treat uploaded files as hostile input; server-side PDF validation and private storage are
+  authoritative, and browser validation is only usability feedback.
 - Keep secrets and real personal data out of source, fixtures, tests, screenshots, and logs.
 - Never weaken validation, security rules, or tests to make a check pass.
 
@@ -65,10 +70,28 @@ depend on hover to understand or operate a control.
 - Do not add a state library without a demonstrated need and a superseding ADR.
 - Do not store candidate data or authorization credentials in localStorage.
 - Candidate authorization must never rely on numeric identifiers.
-- Future draft access must use high-entropy server-generated secrets.
-- Future CV validation must be server-side and must not trust browser MIME types or extensions alone.
+- Draft access uses high-entropy server-generated secrets through the protected HttpOnly ownership
+  cookie; the frontend must never read, duplicate, or persist the raw credential.
+- CV validation is server-side and does not trust browser MIME types or extensions alone.
 - Uploaded documents must remain private by default.
 - Django Admin access must remain separate from candidate access.
+
+## Frontend Replacement Rule
+
+- Read `docs/frontend-integration/README.md` before frontend architecture or integration changes.
+- Visual changes may stay frontend-only when they preserve the documented API and security
+  contracts.
+- Integration changes must preserve relative `/api/v1/` paths, cookies, CSRF, `ETag`/`If-Match`,
+  error semantics, private CV metadata, and deferred submission/status behavior.
+- Models, migrations, draft credential rules, CSRF middleware, private storage, and PDF validation
+  are outside frontend-only scope.
+- Never rewrite both frontend and backend in one task unless explicitly authorized.
+- Prefer a parallel `frontend-v2` for major redesigns.
+- Never declare frontend replacement complete without real Django full-stack tests.
+- Never remove the old frontend until the replacement passes the documented cutover checks.
+- Do not use fixture fallback to hide API failures.
+- Do not add CORS or disable CSRF as a shortcut.
+- Backend contract changes must update frontend contract documentation and tests in the same task.
 
 ## Command And Change Reporting
 

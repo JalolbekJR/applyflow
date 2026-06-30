@@ -9,7 +9,7 @@ describe('FileUpload', () => {
     vi.useRealTimers()
   })
 
-  it('emits selected PDF metadata without retaining file contents', async () => {
+  it('emits the selected PDF file for the API upload boundary', async () => {
     vi.useFakeTimers()
     const wrapper = mount(FileUpload, { props: { metadata: null } })
     const input = wrapper.get('input[type="file"]')
@@ -18,12 +18,8 @@ describe('FileUpload', () => {
     Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
     await input.trigger('change')
     await vi.runAllTimersAsync()
-    const metadata = {
-      name: 'avery-example-cv.pdf',
-      size: file.size,
-      type: 'application/pdf',
-    }
-    expect(wrapper.emitted('update:metadata')?.[0]?.[0]).toEqual(metadata)
+    expect(wrapper.emitted('upload')?.[0]?.[0]).toBe(file)
+    const metadata = { name: 'avery-example-cv.pdf', size: file.size, type: 'application/pdf' }
     await wrapper.setProps({ metadata })
     expect(wrapper.get('.upload-result strong').text()).toBe('avery-example-cv.pdf')
   })

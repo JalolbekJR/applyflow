@@ -6,10 +6,15 @@ import { formatFileSize } from '~/utils/validation'
 const props = defineProps<{
   metadata: UploadedDocumentMetadata | null
   error?: string
+  progress?: number | null
+  canCancel?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:metadata': [value: UploadedDocumentMetadata | null]
+  upload: [value: File]
+  cancel: []
+  remove: []
 }>()
 
 const input = useTemplateRef<HTMLInputElement>('input')
@@ -38,24 +43,33 @@ const onFileChange = async (event: Event) => {
   }
 
   status.value = 'uploading'
-  await new Promise((resolve) => window.setTimeout(resolve, 220))
-  emit('update:metadata', { name: file.name, size: file.size, type: file.type })
-  status.value = 'uploaded'
+  emit('upload', file)
 }
 
 const removeFile = () => {
   if (input.value) input.value.value = ''
   localError.value = ''
   status.value = 'idle'
-  emit('update:metadata', null)
+  emit('remove')
+}
+
+const cancelUpload = () => {
+  emit('cancel')
 }
 
 watch(
   () => props.metadata,
   (metadata) => {
-    if (metadata && status.value === 'idle') status.value = 'uploaded'
+    status.value = metadata ? 'uploaded' : 'idle'
   },
   { immediate: true },
+)
+
+watch(
+  () => props.error,
+  (error) => {
+    if (error) status.value = 'rejected'
+  },
 )
 </script>
 
@@ -74,7 +88,7 @@ watch(
         <label id="document-label" for="cv-upload">
           CV upload <span aria-hidden="true">*</span>
         </label>
-        <p id="document-hint">PDF only. Maximum 5 MB. The backend will verify files later.</p>
+        <p id="document-hint">PDF only. Maximum 5 MB. The backend verifies every upload.</p>
       </div>
       <span class="required-note">Required</span>
     </div>
@@ -92,7 +106,7 @@ watch(
     <div v-if="metadata" class="upload-result" aria-live="polite">
       <div>
         <strong>{{ metadata.name }}</strong>
-        <span>{{ formatFileSize(metadata.size) }} - ready for this simulated application</span>
+        <span>{{ formatFileSize(metadata.size) }} - uploaded to the protected draft</span>
       </div>
       <div class="inline-actions">
         <button class="text-button" type="button" @click="chooseFile">Replace</button>
@@ -102,7 +116,25 @@ watch(
       </div>
     </div>
     <div v-else class="upload-empty">
-      <p v-if="status === 'uploading'" aria-live="polite">Reading file details...</p>
+      <div v-if="status === 'uploading'" class="upload-progress" aria-live="polite">
+        <p v-if="typeof progress === 'number'">Uploading CV... {{ progress }}%</p>
+        <p v-else>Uploading CV...</p>
+        <progress
+          v-if="typeof progress === 'number'"
+          :value="progress"
+          max="100"
+          aria-label="CV upload progress"
+        />
+        <progress v-else aria-label="CV upload progress" />
+        <button
+          v-if="canCancel"
+          class="text-button text-button--danger"
+          type="button"
+          @click="cancelUpload"
+        >
+          Cancel upload
+        </button>
+      </div>
       <template v-else>
         <p>Choose the PDF you want Northline Studio to review.</p>
         <button class="button button--secondary" type="button" @click="chooseFile">

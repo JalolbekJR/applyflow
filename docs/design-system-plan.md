@@ -7,20 +7,22 @@ the implemented system rather than precede it.
 
 ## Token Families
 
-| Family | Roles |
-| --- | --- |
-| Color | Surface, ink, line, signal, danger, warning, success, focus. |
-| Typography | Family, size, line-height, weight, measure, responsive usage. |
-| Spacing | Scale, page gutters, section spacing, and form grouping. |
-| Radius | Input, button, small panel, modal. Keep modest. |
-| Borders | Subtle lines, focus lines, active step line. |
-| Shadows | Sticky footer, modal, dropdown, upload drag state. |
-| Motion | Duration, easing, reduced-motion fallback. |
-| Breakpoints | Small phone, large phone, tablet, laptop, wide desktop. |
-| Focus | Outline color, offset, thickness, high-contrast fallback. |
-| Status | Error, warning, success, pending, submitted, closed. |
-| Container | Reading width, form width, detail width, wide layout. |
-| Z-index | Skip link, sticky progress, modal, toast, upload overlay if used. |
+| Family               | Roles                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Color                | Surface, ink, line, signal, danger, warning, success, focus.                                                                                         |
+| Brand semantic color | Page background, surface, muted surface, text, muted text, border, primary, primary hover/active, primary text, focus, danger, warning, and success. |
+| Typography           | Family, size, line-height, weight, measure, responsive usage.                                                                                        |
+| Brand typography     | Body and heading font stacks selected from reviewed system-font values.                                                                              |
+| Spacing              | Scale, page gutters, section spacing, and form grouping.                                                                                             |
+| Radius               | Input, button, small panel, modal. Keep modest.                                                                                                      |
+| Borders              | Subtle lines, focus lines, active step line.                                                                                                         |
+| Shadows              | Sticky footer, modal, dropdown, upload drag state.                                                                                                   |
+| Motion               | Duration, easing, reduced-motion fallback.                                                                                                           |
+| Breakpoints          | Small phone, large phone, tablet, laptop, wide desktop.                                                                                              |
+| Focus                | Outline color, offset, thickness, high-contrast fallback.                                                                                            |
+| Status               | Error, warning, success, pending, submitted, closed.                                                                                                 |
+| Container            | Reading width, form width, detail width, wide layout.                                                                                                |
+| Z-index              | Skip link, sticky progress, modal, toast, upload overlay if used.                                                                                    |
 
 ## Component Inventory
 
@@ -83,6 +85,12 @@ mode removes non-essential movement while preserving status changes through text
 Implemented token values live in `frontend/app/assets/css/main.css`. Changes require responsive,
 keyboard, pointer, touch, reduced-motion, and contrast review. Figma remains optional under
 [ADR 0012](decisions/0012-code-first-design-workflow.md).
+
+Slice 7 adds a source-controlled brand configuration layer under `frontend/app/branding/`. It may
+change safe public copy, display names, reviewed links, semantic tokens, and closed layout variants.
+It cannot change API paths, credentials, CSRF behavior, ETag handling, required consent, upload
+limits, arbitrary backend fields, or runtime JavaScript/CSS/HTML. The default ApplyFlow/Northline
+configuration remains the reference appearance.
 
 ## Implementation Notes
 

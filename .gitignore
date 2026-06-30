@@ -49,6 +49,7 @@ logs/
 
 # Test artifacts
 test-results/
+test-results-fullstack/
 playwright-report/
 blob-report/
 screenshots/

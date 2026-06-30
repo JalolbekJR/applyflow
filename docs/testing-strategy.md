@@ -1,7 +1,7 @@
 # Testing Strategy
 
-Testing covers the implemented Phase 1 frontend, Phase 2 backend foundation, and completed Phase 3
-backend slices.
+Testing covers the implemented Phase 1 frontend, Phase 2 backend foundation, completed Phase 3
+backend slices, and current Slice 7 frontend integration.
 
 ## Current Frontend Checks
 
@@ -19,26 +19,44 @@ npm run test:e2e
 ### Unit And Component Coverage
 
 - Candidate and experience validation.
-- Vacancy service cloning and active-vacancy lookup.
+- Relative API transport, same-origin credentials, empty `204` responses, safe error
+  normalization, CSRF bootstrap deduplication, and memory-only CSRF token storage.
+- Runtime response guards and draft `ETag` parsing.
+- Vacancy API mapping and active-vacancy lookup.
+- Draft aggregate mapping, employment-entry mapping, and private document metadata exclusion.
+- Backend field-error mapping to existing UI controls.
+- Draft mutation serialization.
 - Step progress semantics.
 - Error-summary focus, scrolling, links, and grouped destinations.
-- PDF metadata acceptance, unsupported file rejection, and oversize metadata rejection.
-- Credential copy success and manual-copy recovery.
-- Deterministic simulated save failure and retry.
+- PDF selection, unsupported file rejection, oversize file rejection, upload event emission, and
+  protected metadata display.
+- Default brand validation, alternate fictional brand validation, unsafe config rejection, and proxy
+  target validation.
 
 ### Playwright Coverage
 
-- Vacancy discovery through confirmation and valid status lookup.
-- Invalid application routes and draft-mutation regression.
-- Route heading focus and review-edit navigation.
-- Text, radio group, upload group, and consent error destinations.
-- Generic status failure and form relationship.
-- Save failure, preserved values, announcement, focus, and retry.
-- Rejected upload without loss of unrelated values.
-- Submission-in-progress duplicate activation guard.
-- Keyboard application start.
-- Mobile semantic and visual vacancy order, footer targets, and 320px reflow.
-- Responsive and affected-state screenshots for human review.
+The default Playwright suite is a deterministic browser smoke with Playwright-routed API responses.
+It exercises the current Slice 7 UI shape, deferred submission behavior, employment-entry controls,
+CV metadata display, and mobile overflow.
+
+The real-stack Slice 7 harness is run separately with:
+
+```powershell
+npm run test:e2e:fullstack
+```
+
+It verifies:
+
+- Browser to Nuxt same-origin `/api/**` proxy to Django.
+- Temporary SQLite database and temporary private document root.
+- Fictional seeded vacancy only.
+- Real draft create/resume after reload.
+- Candidate details save, experience summary save, employment-entry create/edit/delete.
+- Real CV upload, replacement, and deletion.
+- Review route shows the persisted aggregate.
+- Active-draft conflict, conflict/error focus, abandonment, keyboard flow, 320px, 390px, and 1440px
+  checks.
+- No generated database, storage object, screenshot, report, or trace is committed.
 
 ## Current Backend Checks
 
@@ -57,7 +75,9 @@ Current pytest coverage includes:
 - Vacancy UUID, status choices, slug uniqueness, published reads, and unpublished rejection.
 - Separate draft and submitted application records.
 - Submitted-application public-reference and vacancy/normalized-email uniqueness.
-- Draft and status credential hashing and verification.
+- Draft credential hashing and verification for the current draft API.
+- Submitted-application status-secret hashing helper coverage at model level only; no private
+  status-lookup endpoint or end-to-end status flow exists.
 - Document owner XOR, active-document uniqueness, checksum, and physical-deletion constraints.
 - Safe Django Admin registration with credential hashes, storage keys, and checksums excluded.
 - Health, read-only vacancy API, unsupported mutation, and JSON error behavior.
@@ -67,67 +87,68 @@ Current pytest coverage includes:
   strict document-storage configuration, no public storage route or URL capability, secure PDF
   validation, and authorized singleton CV metadata/upload/replacement/delete behavior.
 
-## Phase 3 Planned Test Matrix
+## Phase 3 Verification Matrix
 
 ### Models, Constraints, And Services
 
-| Area | Required tests | Primary engine |
-| --- | --- | --- |
-| Credential hashing | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize. | SQLite |
-| Draft expiry | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention. | SQLite |
-| Ownership | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required. | SQLite |
-| State transitions | Only active drafts mutate; abandon/expire revoke and scrub; submitted transition remains unavailable in Phase 3. | SQLite |
-| Optimistic version | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry. | SQLite; concurrent lock behavior on PostgreSQL |
-| Experience entries | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, ordering, cascade/scrub, and parent-version increment. | SQLite; concurrent cap/order on PostgreSQL |
-| Active document uniqueness | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically. | SQLite; concurrent replacement on PostgreSQL |
-| Cleanup eligibility | Expired, abandoned, pending physical deletion, and stale orphan grace-period rules; active/recent objects excluded. | SQLite plus temporary fake/local storage |
-| Scrubbing | Candidate fields, skills, message, consent, experience text, and original display filename are removed before retryable storage cleanup. | SQLite |
+| Area                        | Status                                                                    | Required tests                                                                                                                                                                                                        | Primary engine                                 |
+| --------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Credential hashing          | Implemented and currently tested                                          | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize.                                                                                                    | SQLite                                         |
+| Draft expiry                | Implemented and currently tested                                          | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention.                                                                | SQLite                                         |
+| Ownership                   | Implemented and currently tested                                          | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required.                                                                                      | SQLite                                         |
+| State transitions           | Implemented and currently tested                                          | Only active drafts mutate; abandon/request-time expire revoke and scrub; submitted transition remains unavailable in Phase 3.                                                                                         | SQLite                                         |
+| Optimistic version          | Implemented; PostgreSQL-specific verification pending                     | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry.     | SQLite; concurrent lock behavior on PostgreSQL |
+| Experience entries          | Implemented; PostgreSQL-specific cap/order verification pending           | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, persisted order, cascade/scrub, and parent-version increment.                                                           | SQLite; concurrent cap/order on PostgreSQL     |
+| Active document uniqueness  | Implemented; PostgreSQL-specific replacement verification pending         | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically.                                                                                                             | SQLite; concurrent replacement on PostgreSQL   |
+| Cleanup-supporting metadata | Implemented and currently tested                                          | Logical deletion, deletion timestamps, pending physical-deletion metadata, request-path delete attempts, replacement compensation, and adapter enumeration.                                                           | SQLite plus temporary fake/local storage       |
+| Cleanup command coverage    | Planned Slice 8 coverage                                                  | Cleanup eligibility beyond request paths, stale-orphan grace-period behavior, batch selection, dry-run, repeated execution, retry across command runs, aggregate output, exit behavior, and parallel cleanup locking. | SQLite plus temporary fake/local storage       |
+| Scrubbing                   | Implemented for current request paths; full batch cleanup planned Slice 8 | Candidate fields, skills, message, consent, experience text, and original display filename are removed during abandonment/request-time expiry paths; batch cleanup of inaccessible drafts remains planned.            | SQLite                                         |
 
 ### API Authorization And CSRF
 
-| Scenario | Expected evidence |
-| --- | --- |
-| Create and resume | No cookie creates `201`; same valid cookie/vacancy restores `200`; no duplicate draft. |
-| Active resolution | No cookie returns `204`; valid cookie returns the aggregate and `ETag`; response excludes hashes, normalized email, storage key, checksum, physical-deletion fields, and public document IDs. |
-| Missing credential | Generic `404 draft_unavailable`; no object details. |
-| Incorrect credential | Same status, code, message shape, and safe fields as missing credential. |
-| Cross-draft access | A valid cookie for draft A cannot read or mutate draft B, its experience, or its document. |
-| Cross-vacancy access | A draft cannot be rebound or reused for another vacancy; creation returns the defined conflict. |
-| Expired or abandoned | Access is revoked, cookie cleared where appropriate, data scrubbed, and generic response returned. |
-| Enumeration resistance | Random, real-other, deleted, expired, and malformed UUID targets use indistinguishable candidate-facing errors. |
-| CSRF | Unsafe requests without a token, with a wrong token, or from an untrusted origin fail; valid same-origin header succeeds. Use clients with `enforce_csrf_checks=True`. |
-| Fixation | An attacker-supplied invalid cookie is cleared and is not adopted or replaced in the same create request. |
-| Replay | Revoked or expired credentials cannot resume or mutate; ordinary valid concurrent requests still face version checks. |
-| Conflict | Stale candidate, experience, entry, upload, replace, and delete mutations return `409` without changing data. |
-| Version precondition | Missing `If-Match` on candidate, experience, entry, CV, and abandonment mutations returns `428 draft_version_required`. |
-| Error envelope | Every Phase 3 error has one request ID shared with `X-Request-ID` and no internal details. |
-| Cache policy | CSRF, draft, candidate, experience, and document responses use `Cache-Control: no-store`. |
-| Methods | Unsupported methods return the existing JSON envelope and do not mutate state. |
+| Scenario               | Status                                                                   | Expected evidence                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create and resume      | Implemented and currently tested                                         | No cookie creates `201`; same valid cookie/vacancy restores `200`; no duplicate draft.                                                                                                        |
+| Active resolution      | Implemented and currently tested                                         | No cookie returns `204`; valid cookie returns the aggregate and `ETag`; response excludes hashes, normalized email, storage key, checksum, physical-deletion fields, and public document IDs. |
+| Missing credential     | Implemented and currently tested                                         | Generic `404 draft_unavailable`; no object details.                                                                                                                                           |
+| Incorrect credential   | Implemented and currently tested                                         | Same status, code, message shape, and safe fields as missing credential.                                                                                                                      |
+| Cross-draft access     | Implemented and currently tested                                         | A valid cookie for draft A cannot read or mutate draft B, its experience, or its document.                                                                                                    |
+| Cross-vacancy access   | Implemented and currently tested                                         | A draft cannot be rebound or reused for another vacancy; creation returns the defined conflict.                                                                                               |
+| Expired or abandoned   | Implemented and currently tested                                         | Access is revoked, cookie cleared where appropriate, data scrubbed on current paths, and generic response returned.                                                                           |
+| Enumeration resistance | Implemented and currently tested                                         | Random, real-other, deleted, expired, and malformed UUID targets use indistinguishable candidate-facing errors.                                                                               |
+| CSRF                   | Implemented and currently tested                                         | Unsafe requests without a token, with a wrong token, or from an untrusted origin fail; valid same-origin header succeeds. Use clients with `enforce_csrf_checks=True`.                        |
+| Fixation               | Implemented and currently tested                                         | An attacker-supplied invalid cookie is cleared and is not adopted or replaced in the same create request.                                                                                     |
+| Replay                 | Implemented and currently tested                                         | Revoked or expired credentials cannot resume or mutate; ordinary valid concurrent requests still face version checks.                                                                         |
+| Conflict               | Implemented and currently tested                                         | Stale candidate, experience, entry, upload, replace, and delete mutations return `409` without changing data.                                                                                 |
+| Version precondition   | Implemented and currently tested                                         | Missing `If-Match` on candidate, experience, entry, CV, and abandonment mutations returns `428 draft_version_required`.                                                                       |
+| Error envelope         | Implemented for error JSON and response header; log correlation deferred | Current API errors include a JSON request ID and `X-Request-ID`; no test or implementation proves shared structured log correlation.                                                          |
+| Cache policy           | Implemented and currently tested                                         | CSRF, draft, candidate, experience, and document responses use `Cache-Control: no-store`.                                                                                                     |
+| Methods                | Implemented and currently tested                                         | Unsupported methods return the existing JSON envelope and do not mutate state.                                                                                                                |
 
 ### Upload, Storage, Replacement, And Deletion
 
-| Scenario | Expected evidence |
-| --- | --- |
-| Valid PDF | `.pdf`, declared `application/pdf`, valid header/structure, 1-10 pages, no forbidden active content; private generated key and safe metadata persist. |
-| Wrong extension | Rejected even if MIME and magic bytes claim PDF. |
-| Wrong MIME | Rejected even with `.pdf` and PDF bytes. |
-| Wrong magic bytes | Rejected even with extension and MIME. |
-| Empty file | Rejected without storage or metadata. |
-| Oversized file | Exactly 5 MiB accepted if otherwise valid; one byte over rejected with `413`; chunk reader stops without unbounded memory. |
-| Malformed/encrypted PDF | Structural parse failure, zero pages, over-ten pages, encryption, embedded files, JavaScript, `/OpenAction`, `/AA`, file-attachment annotations, RichMedia/Movie/Sound/Screen/3D annotations, or automatic actions rejected. |
-| Malicious filename | Traversal separators, absolute paths, control characters, Unicode edge cases, excessive length, and blank names normalize to safe display metadata and never affect the key. |
-| Checksum | SHA-256 matches stored bytes but never appears in API output or logs. |
-| Storage key boundary | Implemented in Slice 4: canonical `drafts/{draft_uuid}/{document_uuid}.pdf` keys reject traversal, alternate separators, control characters, non-canonical UUIDs, unexpected extensions, and temporary-name collisions before storage access. |
-| Private adapter contract | Implemented in Slice 4: local and fake adapters share save/open/delete/exists/enumeration behavior, duplicate saves never overwrite, failed writes clean temporary files, and enumeration returns stable relative keys only. |
-| Validation service boundary | Implemented in Slice 5: validates bytes or binary streams and returns safe metadata only; no endpoint, storage write, database write, URL, or download route is introduced. |
-| Initial storage failure | No active metadata; form answers preserved; safe retry response. |
-| Metadata failure after save | Compensating delete runs; failed compensation becomes orphan-cleanup evidence. |
-| Replacement success | Old document stays active until new validation/storage succeeds; transaction activates only the new metadata; old blob becomes cleanup-eligible. |
-| Replacement failure | Old active metadata and blob remain authorized; no second active document. |
-| Deletion | Authorization stops at logical deletion; physical failure is retryable; repeat does not restore access. |
-| Unauthorized mutation | Another draft cannot read metadata, create/replace, or delete the singleton CV. |
-| Orphan cleanup | Unreferenced keys younger than 24 hours are retained; older confirmed orphans are removed in bounded idempotent runs. |
-| Public exposure | No API response, admin field, static route, or Nuxt route exposes a storage key or public URL. |
+| Scenario                    | Expected evidence                                                                                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Valid PDF                   | `.pdf`, declared `application/pdf`, valid header/structure, 1-10 pages, no forbidden active content; private generated key and safe metadata persist.                                                                                         |
+| Wrong extension             | Rejected even if MIME and magic bytes claim PDF.                                                                                                                                                                                              |
+| Wrong MIME                  | Rejected even with `.pdf` and PDF bytes.                                                                                                                                                                                                      |
+| Wrong magic bytes           | Rejected even with extension and MIME.                                                                                                                                                                                                        |
+| Empty file                  | Rejected without storage or metadata.                                                                                                                                                                                                         |
+| Oversized file              | Exactly 5 MiB accepted if otherwise valid; one byte over rejected with `413`; chunk reader stops without unbounded memory.                                                                                                                    |
+| Malformed/encrypted PDF     | Structural parse failure, zero pages, over-ten pages, encryption, embedded files, JavaScript, `/OpenAction`, `/AA`, file-attachment annotations, RichMedia/Movie/Sound/Screen/3D annotations, or automatic actions rejected.                  |
+| Malicious filename          | Traversal separators, absolute paths, control characters, Unicode edge cases, excessive length, and blank names normalize to safe display metadata and never affect the key.                                                                  |
+| Checksum                    | SHA-256 matches stored bytes but never appears in API output or logs.                                                                                                                                                                         |
+| Storage key boundary        | Implemented in Slice 4: canonical `drafts/{draft_uuid}/{document_uuid}.pdf` keys reject traversal, alternate separators, control characters, non-canonical UUIDs, unexpected extensions, and temporary-name collisions before storage access. |
+| Private adapter contract    | Implemented in Slice 4: local and fake adapters share save/open/delete/exists/enumeration behavior, duplicate saves never overwrite, failed writes clean temporary files, and enumeration returns stable relative keys only.                  |
+| Validation service boundary | Implemented in Slice 5: validates bytes or binary streams and returns safe metadata only; no endpoint, storage write, database write, URL, or download route is introduced.                                                                   |
+| Initial storage failure     | No active metadata; form answers preserved; safe retry response.                                                                                                                                                                              |
+| Metadata failure after save | Compensating delete runs; failed compensation becomes orphan-cleanup evidence.                                                                                                                                                                |
+| Replacement success         | Old document stays active until new validation/storage succeeds; transaction activates only the new metadata; old blob becomes cleanup-eligible.                                                                                              |
+| Replacement failure         | Old active metadata and blob remain authorized; no second active document.                                                                                                                                                                    |
+| Deletion                    | Authorization stops at logical deletion; physical failure is retryable; repeat does not restore access.                                                                                                                                       |
+| Unauthorized mutation       | Another draft cannot read metadata, create/replace, or delete the singleton CV.                                                                                                                                                               |
+| Orphan cleanup              | Deferred Slice 8 coverage: unreferenced keys younger than the approved grace period are retained; older confirmed orphans are removed in bounded idempotent runs.                                                                             |
+| Public exposure             | No API response, admin field, static route, or Nuxt route exposes a storage key or public URL.                                                                                                                                                |
 
 Malware scanning is not tested or claimed because Phase 3 does not implement it.
 
@@ -135,25 +156,26 @@ Malware scanning is not tested or claimed because Phase 3 does not implement it.
 
 - CSRF bootstrap and header injection without exposing the draft cookie to JavaScript.
 - Draft create, active resolve, restore after refresh, and vacancy-conflict normalization.
-- 800 ms debounce, explicit flush before navigation, one in-flight save, retry, and cancellation.
+- Explicit save/continue mutation handling, one in-flight mutation queue, retry, and cancellation.
 - Server field errors mapped to existing summary and input associations.
 - Generic expired/unavailable recovery that clears in-memory candidate data.
 - Stale-version conflict preserves local text and requires a deliberate refresh/review action.
-- Experience-entry add, edit, order, cap, validation, delete confirmation, and server rollback.
+- Experience-entry add, edit, persisted position ordering, cap, validation, delete confirmation,
+  and server rollback.
 - Upload progress, cancel, retry, successful singleton-CV metadata, replacement preserving old
   metadata until success, and confirmed deletion.
 - Loading, saving, saved, failed, retrying, uploaded, removed, conflict, and expired announcements.
 - Disabled states, stable layout regions, focus movement, keyboard operation, and reduced-motion
   behavior.
-- Fixture submission and status behavior remains explicitly simulated and isolated from real draft
-  services.
+- Final submission and status lookup remain disabled/deferred. No fake submission or fake status
+  service remains active in the real candidate path.
 
 ### Browser Coverage
 
 - Start, save candidate fields, refresh, and restore on every application route.
 - Continue an existing same-vacancy draft and deliberately abandon a conflicting-vacancy draft.
 - Direct cross-vacancy route navigation never mutates the authorized draft.
-- Autosave failure and retry preserve typed values; stale conflict does not overwrite either tab.
+- Save failure and retry preserve typed values; stale conflict does not overwrite either tab.
 - Expired draft offers a fresh start without revealing target existence.
 - Valid upload reports progress and persists metadata across refresh.
 - Invalid, oversized, and malformed uploads preserve candidate and experience data.
@@ -162,12 +184,13 @@ Malware scanning is not tested or claimed because Phase 3 does not implement it.
 - Error summary, grouped controls, upload region, conflict notice, and destructive confirmations
   receive correct focus and accessible descriptions.
 - Touch operation does not depend on hover; reduced-motion mode avoids smooth/ornamental motion.
-- Final submission and status remain visibly simulated and no Phase 4 API is called.
+- Final submission and status remain disabled/deferred and no Phase 4 API is called.
 
 ## SQLite And PostgreSQL Boundary
 
-SQLite remains appropriate for serializer, service, API, cleanup, storage-adapter, and most model
-tests. It can exercise the existing check and partial-unique behavior used by the local project.
+SQLite remains appropriate for serializer, service, API, cleanup-supporting metadata,
+storage-adapter, and most model tests. It can exercise the existing check and partial-unique
+behavior used by the local project.
 
 The following evidence must be repeated on PostgreSQL before production-readiness claims:
 

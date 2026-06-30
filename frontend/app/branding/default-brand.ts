@@ -1,0 +1,85 @@
+import { validateBrandConfig } from './schema'
+
+export const defaultBrand = validateBrandConfig({
+  productName: 'Northline Studio Careers',
+  shortName: 'Northline Studio',
+  logoText: 'Northline Studio',
+  logoAlt: 'Northline Studio careers',
+  faviconHref: '/favicon.ico',
+  supportContactText: 'Northline Studio is fictional.',
+  legalLinks: [{ label: 'Privacy', href: '/privacy' }],
+  accessibilityLink: { label: 'Accessibility', href: '/accessibility' },
+  pageTitleSuffix: 'Northline Studio',
+  publicCopy: {
+    homeEyebrow: 'Northline Studio / Open roles',
+    homeTitle: 'Applying should not feel like filing taxes twice.',
+    homeIntro:
+      'Understand the role, share only what is needed, review your answers, and know what happens next.',
+    vacancyListIntro:
+      'Compare the work, expectations, and practical details before deciding whether to apply.',
+    footerNote:
+      'Northline Studio is fictional. ApplyFlow uses real draft APIs for implemented Phase 3 behaviour; final submission and status lookup remain future work.',
+  },
+  companyDescriptor: 'Fictional product studio',
+  theme: {
+    pageBackground: '#f3f0e8',
+    surface: '#fffdf8',
+    surfaceMuted: '#e8e3d8',
+    text: '#181814',
+    textMuted: '#5e5c54',
+    border: '#aaa69b',
+    borderStrong: '#36362f',
+    primary: '#1f5d4a',
+    primaryHover: '#164536',
+    primaryActive: '#10372b',
+    primaryText: '#fffdf8',
+    focus: '#005fcc',
+    danger: '#a12b2b',
+    warning: '#8a5b00',
+    success: '#246346',
+    pending: '#665a8f',
+    bodyFont: "ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    headingFont: "'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif",
+  },
+  experience: {
+    applicationLayout: 'standard',
+    headerVariant: 'standard',
+    vacancyListVariant: 'cards',
+    progressVariant: 'steps',
+    showOptionalPortfolio: true,
+    emphasizeEmploymentEntries: false,
+    finalSubmission: false,
+    statusLookup: false,
+  },
+})
+
+export const alternateTestBrand = validateBrandConfig({
+  ...defaultBrand,
+  productName: 'Riverbend Labs Careers',
+  shortName: 'Riverbend Labs',
+  logoText: 'Riverbend Labs',
+  logoAlt: 'Riverbend Labs careers',
+  pageTitleSuffix: 'Riverbend Labs',
+  publicCopy: {
+    ...defaultBrand.publicCopy,
+    homeEyebrow: 'Riverbend Labs / Hiring',
+    vacancyListIntro: 'Review open roles and apply through the same secure draft workflow.',
+  },
+  theme: {
+    ...defaultBrand.theme,
+    pageBackground: '#eef4f2',
+    surface: '#ffffff',
+    surfaceMuted: '#d9e7e2',
+    primary: '#275e82',
+    primaryHover: '#1d4762',
+    primaryActive: '#16384e',
+    focus: '#7a3ffc',
+    bodyFont: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    headingFont: "Georgia, 'Times New Roman', serif",
+  },
+  experience: {
+    ...defaultBrand.experience,
+    applicationLayout: 'compact',
+    headerVariant: 'minimal',
+  },
+})

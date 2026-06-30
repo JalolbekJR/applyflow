@@ -12,13 +12,15 @@
 - `ApplicationDocument` enforces exactly one draft or application owner and at most one active
   document per owner. Slice 6 stores validated private CV bytes through the document service and
   keeps only safe metadata in candidate JSON.
-- The error handler creates the documented envelope but currently creates request IDs only for
-  errors and does not share them with request logs or headers.
+- The error helpers create the documented envelope, generate request IDs for current error
+  responses, and set `X-Request-ID` on those responses. No request middleware or shared structured
+  log correlation exists yet.
 - CSRF middleware is enabled, and Phase 3 includes an anonymous CSRF-token bootstrap endpoint plus
   the same-origin HttpOnly draft-cookie contract for implemented backend draft APIs.
-- The Nuxt frontend keeps one draft in `useState`, uses typed fixture services, checks vacancy
-  ownership in `useApplicationDraft`, reads only browser file metadata, and preserves accessible
-  loading and recovery states. Refreshing or closing the tab loses the draft.
+- Slice 7 moves the Nuxt candidate draft path to the real vacancy, draft, employment-entry, and CV
+  metadata/upload APIs. It keeps one browser-memory draft aggregate in `useState`, uses browser
+  same-origin cookies and CSRF, serializes unsafe mutations with ETags, and rehydrates from the
+  active-draft endpoint after refresh. Final submission and private status lookup remain Phase 4.
 - The existing product uses experience level, skills, a short message, and a CV. Phase 3 explicitly
   adds zero to five bounded CRUD employment entries ordered by `position`; they remain optional so
   the CV and existing free-text summary stay primary.
@@ -36,10 +38,10 @@ Repository decisions remain authoritative:
 - [ADR 0008](decisions/0008-state-management.md): composables and typed services without Pinia.
 - [ADR 0009](decisions/0009-same-origin-deployment.md): same-origin first deployment.
 
-An official Django 5.2 and Nuxt documentation refresh was attempted for this plan, but the web
-search and direct-page tools both returned HTTP 403 before content was available. Recheck the
-official CSRF, cookie, upload, storage, and development-proxy guidance before implementation. No
-claim in this plan depends on unverified framework behavior beyond the pinned repository baseline.
+The pinned repository implementation and its tests are the current authority for behavior.
+Framework and dependency behavior must be reviewed when versions change, especially around CSRF,
+cookies, uploads, storage, and local development proxying. Future upgrades require compatibility and
+security review before documentation or architecture claims change.
 
 ## Recommended System
 
@@ -56,28 +58,29 @@ flowchart LR
     Drafts --> Database["SQLite local and tests; PostgreSQL target"]
     Documents --> Database
     Documents --> PrivateStorage["Private local storage adapter"]
-    Cleanup["Idempotent management command"] --> Database
-    Cleanup --> PrivateStorage
+    PlannedCleanup["Planned Slice 8 cleanup command"] -. future .-> Database
+    PlannedCleanup -. future .-> PrivateStorage
     Staff["Authenticated staff"] --> Admin["Django Admin metadata only"]
     Admin --> Database
 ```
 
 ### Responsibilities
 
-| Component | Phase 3 responsibility |
-| --- | --- |
-| Models | Persistence, lifecycle timestamps, version, bounded child records, indexes, and constraints. |
-| Serializers | Partial-draft validation, API field naming, safe response projection, and multipart metadata validation. |
-| Draft ownership service | Parse the compound cookie, load only its UUID target, verify the secret hash, and reject non-active or expired drafts. |
-| Draft services | Create, mutate, abandon, scrub, refresh effective expiry, increment version, and enforce vacancy ownership. |
-| Experience services | Create, update, order, cap, and delete entries only under an authorized draft. |
-| Document validator | Enforce extension, MIME, byte limit, signature, structural PDF checks, active-content rejection, filename normalization, and checksum calculation. |
-| Storage interface | Save, open for internal validation/future streaming, delete, test existence, and enumerate stale private objects without leaking provider details into models. |
-| Document services | Coordinate validation, storage, metadata, replacement, logical deletion, compensation, and cleanup. |
-| Request middleware | Generate one request ID, return it in `X-Request-ID`, and expose privacy-safe context to errors and logs. |
-| Cleanup command | Expire and scrub drafts, delete physical blobs, retry pending deletion, and remove stale orphan objects. |
-| Nuxt typed service | Acquire CSRF, call same-origin APIs, normalize errors, and report upload progress. |
-| Nuxt composable | Hold the authoritative aggregate in memory, coordinate bootstrap, debounced save, conflicts, and route transitions. |
+| Component               | Phase 3 responsibility                                                                                                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Models                  | Persistence, lifecycle timestamps, version, bounded child records, indexes, and constraints.                                                                                                                          |
+| Serializers             | Partial-draft validation, API field naming, safe response projection, and multipart metadata validation.                                                                                                              |
+| Draft ownership service | Parse the compound cookie, load only its UUID target, verify the secret hash, and reject non-active or expired drafts.                                                                                                |
+| Draft services          | Create, mutate, abandon, scrub, refresh effective expiry, increment version, and enforce vacancy ownership.                                                                                                           |
+| Experience services     | Create, update, validate unique `position`, cap, and delete entries only under an authorized draft. A dedicated reorder operation is not implemented.                                                                 |
+| Document validator      | Enforce extension, MIME, byte limit, signature, structural PDF checks, active-content rejection, filename normalization, and checksum calculation.                                                                    |
+| Storage interface       | Save, open for internal validation/future streaming, delete, test existence, and enumerate stale private objects without leaking provider details into models.                                                        |
+| Document services       | Coordinate validation, storage, metadata, replacement, logical deletion, compensation, request-path physical deletion attempts, and pending-deletion metadata.                                                        |
+| Error helpers           | Generate request IDs for API error payloads, return `X-Request-ID` on current error responses, and keep error bodies free of internal details.                                                                        |
+| Request logging         | Deferred: shared request middleware, structured log correlation, and one request ID spanning responses and logs.                                                                                                      |
+| Cleanup command         | Planned Slice 8: expire and scrub inaccessible drafts, enumerate stale orphans, retry pending deletion, support dry-run/apply modes, and report aggregate counts.                                                     |
+| Nuxt typed service      | Acquire CSRF, call same-origin APIs, normalize errors, and report upload progress.                                                                                                                                    |
+| Nuxt composable         | Hold the authoritative aggregate in memory and coordinate bootstrap, explicit save/continue mutations, serialized unsafe mutations, conflict recovery, route transitions, and local form preservation after failures. |
 
 ## Anonymous Ownership Decision
 
@@ -103,9 +106,9 @@ design accepts that residual duplication in order to preserve privacy and cleanu
   return the compound cookie value.
 - Load the UUID named by the cookie and then run a constant-behaviour secret check. Never scan
   hashes or accept a route UUID without verifying that it equals the cookie UUID.
-- Do not rotate on ordinary reads or autosaves because concurrent tabs could invalidate each other.
-  Revoke on abandonment, expiry, and future submission. Add a new explicit rotation action only if
-  a later recovery flow creates a real need.
+- Do not rotate on ordinary reads or repeated draft mutations because concurrent tabs could
+  invalidate each other. Revoke on abandonment, expiry, and future submission. Add a new explicit
+  rotation action only if a later recovery flow creates a real need.
 - Invalid, missing, revoked, expired, cross-draft, cross-document, and cross-experience attempts all
   return `404 draft_unavailable`. The server may clear an unusable cookie but does not reveal which
   check failed.
@@ -116,16 +119,16 @@ design accepts that residual duplication in order to preserve privacy and cleanu
 
 ### Cookie Settings
 
-| Attribute | Production | Local development |
-| --- | --- | --- |
-| Name | `applyflow_draft` | Same |
-| Value | Versioned draft UUID plus raw random secret | Same |
-| `HttpOnly` | `True` | `True` |
-| `Secure` | `True` | `False` only when `APP_ENV=development` and HTTPS is unavailable |
-| `SameSite` | `Lax` | `Lax` |
-| `Path` | `/api/v1/application-drafts/` | Same |
-| `Domain` | Unset, creating a host-only cookie | Unset |
-| Lifetime | Effective expiry is the earliest of seven days after the last successful mutation, thirty days after creation, and the vacancy deadline | Same |
+| Attribute  | Production                                                                                                                              | Local development                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Name       | `applyflow_draft`                                                                                                                       | Same                                                             |
+| Value      | Versioned draft UUID plus raw random secret                                                                                             | Same                                                             |
+| `HttpOnly` | `True`                                                                                                                                  | `True`                                                           |
+| `Secure`   | `True`                                                                                                                                  | `False` only when `APP_ENV=development` and HTTPS is unavailable |
+| `SameSite` | `Lax`                                                                                                                                   | `Lax`                                                            |
+| `Path`     | `/api/v1/application-drafts/`                                                                                                           | Same                                                             |
+| `Domain`   | Unset, creating a host-only cookie                                                                                                      | Unset                                                            |
+| Lifetime   | Effective expiry is the earliest of seven days after the last successful mutation, thirty days after creation, and the vacancy deadline | Same                                                             |
 
 The cookie path deliberately excludes Django Admin and unrelated public routes. Cookie deletion
 must repeat the same name, path, and host scope. `Secure=False` is permitted only for the explicit
@@ -170,11 +173,11 @@ extends beyond `created_at + 30 days` or the vacancy deadline.
 stateDiagram-v2
     [*] --> Active: create
     Active --> Active: authorized mutation / version + 1 / expiry = min(activity + 7d, created + 30d, vacancy deadline)
-    Active --> Abandoned: candidate confirms abandon / revoke / scrub
-    Active --> Expired: expiry check or cleanup / revoke / scrub
+    Active --> AbandonedPendingCleanup: candidate confirms abandon / revoke / scrub / logical delete where reached
+    Active --> ExpiredPendingCleanup: request-time expiry / revoke / scrub / logical delete where reached
     Active --> Submitted: Phase 4 atomic submission only
-    Abandoned --> [*]: physical document cleanup and hard delete
-    Expired --> [*]: physical document cleanup and hard delete
+    AbandonedPendingCleanup --> [*]: planned Slice 8 physical cleanup and hard delete
+    ExpiredPendingCleanup --> [*]: planned Slice 8 physical cleanup and hard delete
     Submitted --> [*]: Phase 4 retention policy
 ```
 
@@ -196,14 +199,17 @@ Rules:
   vacancy. Abandon requires a separate confirmation and authorized `DELETE`.
 - Abandonment uses `DELETE /api/v1/application-drafts/{draft_id}/`, requires `If-Match`, returns
   `204`, revokes the secret, and clears the cookie.
-- Abandonment and expiry set `credential_revoked_at`, scrub structured candidate fields, delete
-  experience entries, logically delete the document, and clear the cookie. The draft shell remains
-  only while physical storage deletion needs a durable key, then cleanup hard-deletes it.
+- Abandonment and request-time expiry set `credential_revoked_at`, scrub structured candidate
+  fields, delete experience entries, logically delete the document where the current request path
+  reaches it, and clear the cookie. The draft shell can retain the durable storage key and deletion
+  state needed for retryable physical cleanup.
+- Slice 8 cleanup will own batch retry and hard deletion of scrubbed draft shells after physical
+  cleanup succeeds.
 - A direct request after expiry follows the same revoke-and-scrub path before returning the generic
   unavailable response.
-- Cleanup is an idempotent Django management command. It supports dry-run reporting, bounded
-  batches, retries pending physical deletions, and privacy-safe aggregate counts. Scheduling is a
-  deployment decision, not Phase 3 infrastructure.
+- Slice 8 cleanup remains a planned idempotent Django management command. It must support dry-run
+  reporting, bounded batches, retries pending physical deletions, and privacy-safe aggregate counts.
+  Scheduling remains deferred.
 - Phase 4 owns atomic submission. It will copy candidate and experience data, transfer the active
   document, mark the draft submitted, revoke the cookie, and make the submitted record immutable.
 
@@ -260,11 +266,10 @@ Apply these checks in order before an upload becomes active:
 9. Generate the storage key from server UUIDs and use the normalized original name only as escaped
    display metadata.
 
-Structural parsing requires one reviewed, pinned PDF parser dependency. `pypdf` is the initial
-candidate because no parser exists in the repository. Implementation must pin the exact reviewed
-release before code changes, use `PdfReader(..., strict=True)`, catch parser failures, return
-generic validation errors, and never describe this validation as antivirus or complete malware
-detection. No dependency is added by this plan.
+Structural parsing uses the reviewed and pinned `pypdf==6.14.1` base package with strict reader
+configuration and defensive failure handling in the current validator. Parser upgrades or optional
+extras require a renewed dependency and security review. PDF validation is structural validation,
+not malware scanning, parser isolation, antivirus, or proof that a file is safe to open.
 
 Use a 30-second upload request timeout at the serving/proxy layer when deployment is implemented.
 Locally, the application still enforces byte and parser limits. Keep large uploads out of process
@@ -289,9 +294,10 @@ and deleting temporary objects after every rejected or failed operation.
   the new one is committed.
 - Deletion: mark `deleted_at` before returning success so authorization stops immediately. Physical
   deletion sets `storage_deleted_at`; failures remain retryable and never restore candidate access.
-- Orphan handling: cleanup retries records with `deleted_at` and no `storage_deleted_at`, then
-  compares provider keys older than 24 hours with live metadata and removes confirmed unreferenced
-  objects in bounded batches.
+- Orphan handling: current services record deletion state and attempt request-path physical
+  deletion where supported. Slice 8 must still add the cleanup command that retries records with
+  `deleted_at` and no `storage_deleted_at`, applies the stale-orphan grace period, compares provider
+  keys with live metadata, and removes confirmed unreferenced objects in bounded batches.
 - Concurrent upload, replace, and delete operations lock the draft/current-document rows and rely
   on the active-document uniqueness constraint. Losers receive `409 draft_conflict`.
 
@@ -300,57 +306,62 @@ and deleting temporary objects after every rejected or failed operation.
 Preserve the current pages, typed service, composable, and route ownership pattern. Pinia remains
 unnecessary.
 
-1. Public vacancy pages can remain SSR-friendly. Draft bootstrap runs in the browser after
-   hydration so candidate data and ownership responses are not serialized into Nuxt SSR payloads.
+1. The current Nuxt frontend is client-rendered with `ssr: false`. Draft bootstrap runs in the
+   browser, and candidate data plus draft ownership responses are not embedded in server-rendered
+   payloads because SSR is not currently enabled. A future SSR or hybrid rendering task must review
+   cookie forwarding, candidate-data serialization, cache behaviour, and API calls before claiming
+   SSR vacancy output.
 2. On application entry, show a stable skeleton, fetch CSRF, resolve the active cookie, then create
    or restore for the requested vacancy. A different vacancy renders the existing continue/abandon
    decision already present in the UI.
 3. Keep the authoritative aggregate in `useApplicationDraft`; local form objects preserve typed
    input during network failures. A reload rehydrates from the server.
-4. Debounce text/choice autosave by 800 ms and flush it before navigation. Explicit Continue/Save
-   remains available and waits for the current save. Incomplete but individually valid draft fields
-   may persist.
-5. On `409 draft_conflict`, stop autosave, preserve the local form in memory, fetch the latest
-   aggregate, and present a focused message with a deliberate reload/review action. Do not merge or
-   overwrite silently.
+4. Use explicit Continue/Save actions and pending states for current mutations. Incomplete but
+   individually valid draft fields may persist after an accepted mutation.
+5. On `409 draft_conflict`, stop the unsafe mutation queue, preserve the local form in memory, fetch
+   the latest aggregate, and present a focused message with a deliberate reload/review action. Do
+   not merge or overwrite silently.
 6. On expiry or an unusable cookie, clear in-memory candidate state, explain that the draft is no
    longer available without confirming whether an identifier existed, and offer a fresh start.
-7. Experience entries use explicit add, edit, reorder, and delete controls, a maximum of five, and
-   confirmation before destructive deletion. Touch and keyboard operation cannot depend on hover.
+7. Experience entries use explicit add, edit, and delete controls with persisted `position`
+   ordering, a maximum of five, and confirmation before destructive deletion. No dedicated reorder
+   UI is currently exposed; a future reorder UI must use supported persisted `position` behavior or
+   require a coordinated API change. Touch and keyboard operation cannot depend on hover.
 8. Upload uses the typed service with `XMLHttpRequest.upload` progress so the component can show
    determinate progress without a dependency. Preserve current metadata during replacement until
    the server confirms success; support cancel, retry, replace, and confirmed delete.
 9. Loading, saving, uploaded, failed, retrying, removed, conflict, and expired messages use stable
    reserved regions, `aria-live` where appropriate, visible focus, disabled pending controls, and
    no layout-shifting feedback. Respect reduced motion.
-10. Submission and confirmation remain the existing clearly labelled simulation until Phase 4.
+10. Submission, application references, and private status lookup remain unavailable until Phase 4;
+    the real candidate path does not call a fake submission or status service.
 
 ## Logging And Privacy
 
-Add structured application logs without logging request or response bodies.
+### Current Privacy Logging Rules
 
-Allowed event categories:
+Current code does not implement structured lifecycle logging or shared request-ID log correlation.
+The active privacy rule is to avoid logging request bodies, response bodies, cookies, credentials,
+candidate fields, experience text, multipart bodies, original filenames, file content, checksums,
+storage keys, CSRF tokens, or Django Admin session values.
 
-- Draft created, resumed, updated, conflicted, abandoned, expired, and cleaned.
-- Experience entry created, updated, deleted, or rejected by category.
-- Document accepted, rejected by reason category, replaced, logically deleted, physically deleted,
-  or found orphaned.
-- Authorization and CSRF denials by category.
-- Cleanup batch counts, duration, retries, and failures.
+Current validation and storage tests exercise privacy-sensitive boundaries such as safe metadata
+projection, hidden Admin fields, no public storage route, checksum exclusion from API output, and
+parser/storage rejection paths that do not require sensitive log content.
 
-Allowed fields are request ID, event name, result category, HTTP status, actor type, vacancy UUID,
-server-known opaque draft/document UUID only when incident correlation requires it, byte-size bucket,
-timestamp, and duration. Application logs do not collect browser fingerprints. Source IP retention
-belongs at a reviewed edge/security layer, not ordinary Phase 3 application logs.
+### Deferred Operational Logging
 
-Never log Cookie or Authorization headers, raw or hashed credentials, candidate fields, experience
-text, request bodies, multipart bodies, original filenames, file content, checksums, storage keys,
-CSRF tokens, or Django Admin session values. Redact these keys recursively before a structured event
-is emitted.
+Future operational logging should add privacy-safe structured events for draft, experience,
+document, authorization, CSRF, and cleanup lifecycles only after a dedicated logging task. Deferred
+work includes shared request-ID correlation, structured lifecycle events not currently emitted,
+cleanup-command events, orphan-cleanup reporting, retention configuration, edge IP/security logging,
+monitoring integration, and legal/operational review of retention periods.
 
-Initial retention targets before legal/operational review are 14 days for ordinary application logs,
-30 days for restricted security-denial records, and 90 days for aggregate cleanup evidence. Local
-development should default to console output with fictional data and no persisted request bodies.
+Allowed future fields should remain limited to request ID, event name, result category, HTTP status,
+actor type, vacancy UUID, server-known opaque draft/document UUID only when incident correlation
+requires it, byte-size bucket, timestamp, and duration. Application logs must not collect browser
+fingerprints. Source IP retention belongs at a reviewed edge/security layer, not ordinary Phase 3
+application logs.
 
 ## Reliability, Scale, And Cost
 
@@ -360,8 +371,8 @@ development should default to console output with fictional data and no persiste
   later against free local PostgreSQL or Docker, or a GitHub Actions service container. Do not
   claim PostgreSQL concurrency safety until those tests pass. Their absence blocks production
   claims, not initial implementation.
-- The cleanup command is retryable and batch-bounded. A durable queue is reconsidered only if
-  observed volume or latency requires it.
+- The cleanup command remains deferred to Slice 8. It must be retryable and batch-bounded when
+  implemented. A durable queue is reconsidered only if observed volume or latency requires it.
 - Private object storage, shared throttling/cache, deployment, monitoring platforms, backups, and
   scheduling remain deferred. Their absence means Phase 3 is not production-ready for real
   candidate data.
@@ -377,7 +388,7 @@ development should default to console output with fictional data and no persiste
 - Public media URLs or original-name storage paths: incompatible with private documents.
 - Database file blobs: increases database backup, memory, and migration costs without a product
   benefit.
-- Last-write-wins autosave: risks silent data loss across tabs.
+- Last-write-wins background saving: risks silent data loss across tabs.
 - Immediate hard deletion before durable storage cleanup: can lose the only key needed to remove an
   orphaned private object.
 - Antivirus, OCR, CV parsing, AI scoring, and custom recruiter workflows: outside Phase 3.

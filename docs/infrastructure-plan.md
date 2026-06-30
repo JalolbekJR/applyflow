@@ -13,7 +13,7 @@ Current local services:
 - Backend: Django development server.
 - Database: SQLite by default, or an explicitly configured PostgreSQL service.
 
-Phase 3 planned local capability:
+Phase 3 local capability:
 
 - The browser calls `/api/**` on the Nuxt origin. A Nuxt development proxy forwards those requests
   to Django, so ownership cookies and CSRF remain same-origin even when the processes use separate
@@ -132,10 +132,16 @@ All three duration settings reject zero, negatives, malformed values, and out-of
 without silent clamping. Missing values use the defaults above. Invalid values stop settings loading
 with `ImproperlyConfigured`. Production-like environments still require secure cookies.
 
+Frontend local-development variable:
+
+- `NUXT_API_PROXY_TARGET`: server-only Nuxt development proxy target. Missing values default to
+  `http://127.0.0.1:8000`. Configured values must be HTTP loopback origins using `localhost`,
+  `127.0.0.1`, or `[::1]`; credentials, query strings, fragments, paths, non-loopback hosts,
+  non-HTTP schemes, malformed ports, and whitespace-repaired values are rejected.
+
 Planned later-phase variables:
 
 - `CSRF_TRUSTED_ORIGINS`
-- `NUXT_API_PROXY_TARGET` for local development only
 
 Do not add `CORS_ALLOWED_ORIGINS` for the accepted Phase 3 topology. If a future deployment changes
 the origin model, it requires a reviewed architecture decision rather than an ad hoc setting.

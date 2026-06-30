@@ -18,6 +18,6 @@ defineExpose({
     aria-labelledby="save-failure-title"
   >
     <h2 id="save-failure-title">This step was not saved</h2>
-    <p>Your answers are still visible. Check your connection and try saving again.</p>
+    <p>Your answers are still visible. Check the message, then try saving again.</p>
   </section>
 </template>

@@ -1,26 +1,25 @@
 <script setup lang="ts">
-import { fixtureVacancyService } from '~/services/vacancy-service'
+import { apiVacancyService } from '~/api/vacancies'
+import { useBrand } from '~/branding/useBrand'
 
+const brand = useBrand()
 useSeoMeta({
-  title: 'ApplyFlow - Northline Studio careers',
+  title: `ApplyFlow - ${brand.pageTitleSuffix} careers`,
   description: 'Review focused product roles and apply through a clear four-step process.',
 })
 
-const { data: vacancies } = await useAsyncData('home-vacancies', () => fixtureVacancyService.list())
+const { data: vacancies } = await useAsyncData('home-vacancies', () => apiVacancyService.list())
 </script>
 
 <template>
   <div class="home-page">
     <section class="home-hero page-wrap" aria-labelledby="home-title">
       <div>
-        <p class="eyebrow">Northline Studio / Open roles</p>
-        <h1 id="home-title" tabindex="-1">Applying should not feel like filing taxes twice.</h1>
+        <p class="eyebrow">{{ brand.publicCopy.homeEyebrow }}</p>
+        <h1 id="home-title" tabindex="-1">{{ brand.publicCopy.homeTitle }}</h1>
       </div>
       <div class="home-hero__support">
-        <p>
-          Understand the role, share only what is needed, review your answers, and know what happens
-          next.
-        </p>
+        <p>{{ brand.publicCopy.homeIntro }}</p>
         <NuxtLink class="button" to="/vacancies">View all vacancies</NuxtLink>
       </div>
     </section>
@@ -53,12 +52,12 @@ const { data: vacancies } = await useAsyncData('home-vacancies', () => fixtureVa
         </li>
         <li><strong>Experience</strong><span>Share one PDF CV and relevant skills.</span></li>
         <li>
-          <strong>Review</strong><span>Check everything before the simulated submission.</span>
+          <strong>Review</strong><span>Check everything before the Phase 4 submission step.</span>
         </li>
       </ol>
       <p class="honesty-note">
-        The current frontend uses fictional vacancies and simulated services. Saving, upload, and
-        submission are not connected to a backend.
+        The current frontend uses real draft APIs for implemented Phase 3 behaviour. Final
+        submission and status lookup remain future work.
         <NuxtLink to="/case-study">Read the product notes</NuxtLink>.
       </p>
     </section>

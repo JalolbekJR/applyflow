@@ -10,9 +10,8 @@ flowchart TD
     DraftCheck --> Start["Apply: position step"]
     Start --> Details["Candidate details"]
     Details --> Experience["Experience and CV"]
-    Experience --> Review["Review and submit"]
-    Review --> Submitted["Confirmation"]
-    Submitted --> Status["Private status lookup"]
+    Experience --> Review["Review persisted draft"]
+    Review --> Deferred["Submission unavailable until Phase 4"]
     Home --> CaseStudy["Case study"]
     Home --> Privacy["Privacy"]
     Home --> Accessibility["Accessibility"]
@@ -41,11 +40,7 @@ flowchart TD
     F --> G["Step 2: Candidate details"]
     G --> H["Step 3: Experience"]
     H --> I["Step 4: Review"]
-    I --> J{"Server accepts submission?"}
-    J -- "Yes" --> K["Submitted confirmation"]
-    J -- "Recoverable error" --> L["Show error and preserve fields"]
-    L --> I
-    J -- "Duplicate" --> P["Show existing submission guidance"]
+    I --> J["Final submission disabled until Phase 4"]
 ```
 
 ## Error Paths
@@ -53,14 +48,21 @@ flowchart TD
 - Closed vacancy: the apply action is disabled and the page explains that applications are no longer accepted.
 - Expired, missing, or invalid draft credential: return a generic safe response, do not reveal whether another draft exists, and offer a new start when appropriate.
 - Invalid field: inline error appears, the error summary links to the field, and focus moves to the summary after failed step submission.
-- Invalid upload: the selected file is rejected before submission, with format and size guidance.
-- Upload interruption: candidate can cancel, retry, or remove the file.
-- Duplicate submission: final submission is blocked when the normalized email already has a submitted application for the same vacancy record.
-- Status lookup miss: response is generic and does not reveal whether the application reference or status lookup secret exists.
+- Invalid upload: browser feedback handles obvious file-selection mistakes, and the backend remains
+  authoritative for PDF validation.
+- Upload interruption: candidate can cancel, review the refreshed draft metadata, and deliberately
+  retry or remove the file.
+- Stale draft version: the client refreshes the authorized aggregate, preserves visible form values
+  where practical, and asks the candidate to review before saving again.
+- Final submission and status lookup: disabled/deferred until Phase 4; no fake application reference
+  or status result is returned from the real candidate path.
 
 ## Confirmation Flow
 
-The confirmation page shows:
+The confirmation route is retained only as future-facing copy while Phase 4 is unimplemented. It
+does not show a generated application reference or status lookup secret from the real flow.
+
+Phase 4 is expected to show:
 
 - Application received message.
 - Submitted vacancy.
@@ -70,4 +72,5 @@ The confirmation page shows:
 - Reminder that the status lookup secret is private and the application reference is not proof of ownership.
 - Privacy and retention note.
 
-It does not expose internal notes or promise response timelines that the fictional company cannot guarantee.
+It must not expose internal notes or promise response timelines that the fictional company cannot
+guarantee.

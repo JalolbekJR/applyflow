@@ -4,6 +4,12 @@ Phase 2 implements health and read-only vacancy endpoints. Phase 3 adds authoriz
 drafts, bounded experience entries, and private CV upload and mutation. Final submission and public
 status lookup remain Phase 4 work and are not part of this contract.
 
+This file is the backend implementation contract. Frontend replacement work should start with the
+frontend-facing contract in [docs/frontend-integration/api-contract.md](frontend-integration/api-contract.md)
+and the security rules in [docs/frontend-integration/security-contract.md](frontend-integration/security-contract.md).
+If the two documents appear to conflict, verify the current Django URL configuration, views,
+serializers, services, and tests before changing either contract.
+
 ## Principles
 
 - Version candidate APIs under `/api/v1/`.
@@ -26,11 +32,11 @@ status lookup remain Phase 4 work and are not part of this contract.
 
 ## Implemented Phase 2 Endpoints
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/v1/health/` | Return `{ "status": "ok" }` without configuration details. |
-| `GET` | `/api/v1/vacancies/` | List published, non-expired vacancies. |
-| `GET` | `/api/v1/vacancies/{slug}/` | Return published vacancy detail. |
+| Method | Path                        | Purpose                                                    |
+| ------ | --------------------------- | ---------------------------------------------------------- |
+| `GET`  | `/api/v1/health/`           | Return `{ "status": "ok" }` without configuration details. |
+| `GET`  | `/api/v1/vacancies/`        | List published, non-expired vacancies.                     |
+| `GET`  | `/api/v1/vacancies/{slug}/` | Return published vacancy detail.                           |
 
 Vacancy mutation methods are not exposed.
 
@@ -40,21 +46,21 @@ All draft and document paths require the `applyflow_draft` ownership cookie unle
 otherwise. `GET` and `HEAD` are safe and do not require a CSRF header. Every `POST`, `PATCH`, `PUT`,
 and `DELETE` requires `X-CSRFToken`.
 
-| Method | Path | Purpose | Success | Expected errors | Idempotency |
-| --- | --- | --- | --- | --- | --- |
-| `GET` | `/api/v1/csrf/` | Set the CSRF cookie, establish a short-lived draft-creation key when needed, and return a masked token for the request header. | `200` | `500` | Safe and repeatable. |
-| `GET` | `/api/v1/application-drafts/active/` | Resolve the draft authorized by the ownership cookie. | `204` no cookie, `200` active draft | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. Invalid, expired, revoked, or malformed ownership clears the cookie. |
-| `POST` | `/api/v1/application-drafts/` | Create a draft for a vacancy or resolve the authorized draft for that vacancy. | `201` created, `200` resumed | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error` | Idempotent for the same valid ownership cookie or unexpired creation key and vacancy. A lost create response can be retried with the same creation key without creating another row. An invalid ownership cookie is cleared and never creates a draft in the same request. |
-| `GET` | `/api/v1/application-drafts/{draft_id}/` | Read the authorized draft aggregate. | `200` | `404 draft_unavailable` | Safe and repeatable; does not extend expiry. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/candidate/` | Partially update candidate fields. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/experience/` | Partially update experience level, skills, message, and acknowledgement. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Same as candidate update. |
-| `POST` | `/api/v1/application-drafts/{draft_id}/experiences/` | Create one bounded employment entry. | `201` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Not automatically repeatable. Disable duplicate activation and re-fetch before retrying after an unknown result. |
-| `PATCH` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Partially update an owned employment entry. | `200` | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required` | Data-idempotent for the current `If-Match`. |
-| `DELETE` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Delete an owned employment entry. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
-| `DELETE` | `/api/v1/application-drafts/{draft_id}/` | Abandon and revoke the draft, scrub candidate data, and queue physical document cleanup. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request revokes the secret and clears the cookie. A repeat is safe and returns the generic `404`. |
-| `GET` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Retrieve authorized singleton CV metadata only. | `200` | `404 draft_unavailable` | Safe and repeatable. |
-| `PUT` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Create or replace the authorized singleton CV after the new file passes validation. | `201` created, `200` replaced | `404 draft_unavailable`, `409 draft_conflict`, `413 upload_too_large`, `415 unsupported_file_type`, `422 validation_error`, `422 invalid_pdf`, `428 draft_version_required`, `503 document_storage_unavailable` | Replacement is one logical operation. Re-fetch after an unknown result; never blindly resend file bytes. |
-| `DELETE` | `/api/v1/application-drafts/{draft_id}/documents/cv/` | Logically delete the authorized singleton CV and schedule physical deletion. | `204` | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required` | First request deletes; a repeat returns the generic `404`. |
+| Method   | Path                                                                 | Purpose                                                                                                                        | Success                             | Expected errors                                                                                                                                                                                                 | Idempotency                                                                                                                                                                                                                                                                |
+| -------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/v1/csrf/`                                                      | Set the CSRF cookie, establish a short-lived draft-creation key when needed, and return a masked token for the request header. | `200`                               | `500`                                                                                                                                                                                                           | Safe and repeatable.                                                                                                                                                                                                                                                       |
+| `GET`    | `/api/v1/application-drafts/active/`                                 | Resolve the draft authorized by the ownership cookie.                                                                          | `204` no cookie, `200` active draft | `404 draft_unavailable`                                                                                                                                                                                         | Safe and repeatable; does not extend expiry. Invalid, expired, revoked, or malformed ownership clears the cookie.                                                                                                                                                          |
+| `POST`   | `/api/v1/application-drafts/`                                        | Create a draft for a vacancy or resolve the authorized draft for that vacancy.                                                 | `201` created, `200` resumed        | `404 vacancy_unavailable`, `404 draft_unavailable`, `409 active_draft_conflict`, `422 validation_error`                                                                                                         | Idempotent for the same valid ownership cookie or unexpired creation key and vacancy. A lost create response can be retried with the same creation key without creating another row. An invalid ownership cookie is cleared and never creates a draft in the same request. |
+| `GET`    | `/api/v1/application-drafts/{draft_id}/`                             | Read the authorized draft aggregate.                                                                                           | `200`                               | `404 draft_unavailable`                                                                                                                                                                                         | Safe and repeatable; does not extend expiry.                                                                                                                                                                                                                               |
+| `PATCH`  | `/api/v1/application-drafts/{draft_id}/candidate/`                   | Partially update candidate fields.                                                                                             | `200`                               | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`                                                                                                             | Data-idempotent for the current `If-Match`. An accepted mutation increments `version` once. Re-fetch after an ambiguous network result.                                                                                                                                    |
+| `PATCH`  | `/api/v1/application-drafts/{draft_id}/experience/`                  | Partially update experience level, skills, message, and acknowledgement.                                                       | `200`                               | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`                                                                                                             | Same as candidate update.                                                                                                                                                                                                                                                  |
+| `POST`   | `/api/v1/application-drafts/{draft_id}/experiences/`                 | Create one bounded employment entry.                                                                                           | `201`                               | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`                                                                                                             | Not automatically repeatable. Disable duplicate activation and re-fetch before retrying after an unknown result.                                                                                                                                                           |
+| `PATCH`  | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Partially update an owned employment entry.                                                                                    | `200`                               | `404 draft_unavailable`, `409 draft_conflict`, `422 validation_error`, `428 draft_version_required`                                                                                                             | Data-idempotent for the current `If-Match`.                                                                                                                                                                                                                                |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/experiences/{experience_id}/` | Delete an owned employment entry.                                                                                              | `204`                               | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required`                                                                                                                                     | First request deletes; a repeat returns the generic `404`.                                                                                                                                                                                                                 |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/`                             | Abandon and revoke the draft, scrub candidate data, and queue physical document cleanup.                                       | `204`                               | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required`                                                                                                                                     | First request revokes the secret and clears the cookie. A repeat is safe and returns the generic `404`.                                                                                                                                                                    |
+| `GET`    | `/api/v1/application-drafts/{draft_id}/documents/cv/`                | Retrieve authorized singleton CV metadata only.                                                                                | `200`                               | `404 draft_unavailable`                                                                                                                                                                                         | Safe and repeatable.                                                                                                                                                                                                                                                       |
+| `PUT`    | `/api/v1/application-drafts/{draft_id}/documents/cv/`                | Create or replace the authorized singleton CV after the new file passes validation.                                            | `201` created, `200` replaced       | `404 draft_unavailable`, `409 draft_conflict`, `413 upload_too_large`, `415 unsupported_file_type`, `422 validation_error`, `422 invalid_pdf`, `428 draft_version_required`, `503 document_storage_unavailable` | Replacement is one logical operation. Re-fetch after an unknown result; never blindly resend file bytes.                                                                                                                                                                   |
+| `DELETE` | `/api/v1/application-drafts/{draft_id}/documents/cv/`                | Logically delete the authorized singleton CV and schedule physical deletion.                                                   | `204`                               | `404 draft_unavailable`, `409 draft_conflict`, `428 draft_version_required`                                                                                                                                     | First request deletes; a repeat returns the generic `404`.                                                                                                                                                                                                                 |
 
 Phase 3 does not expose document contents. There is no candidate or public download endpoint, no
 storage URL, and no staff mutation API. A later staff download, if approved, must be an
@@ -293,19 +299,19 @@ Rules:
 
 ## Status Codes
 
-| Code | Meaning in Phase 3 |
-| --- | --- |
-| `200` | Read, restore, update, or replacement succeeded. |
-| `201` | Draft, experience entry, or initial document was created. |
-| `204` | Abandonment or deletion succeeded. |
-| `400` | Malformed JSON, multipart data, or request shape. |
+| Code  | Meaning in Phase 3                                                          |
+| ----- | --------------------------------------------------------------------------- |
+| `200` | Read, restore, update, or replacement succeeded.                            |
+| `201` | Draft, experience entry, or initial document was created.                   |
+| `204` | Abandonment or deletion succeeded.                                          |
+| `400` | Malformed JSON, multipart data, or request shape.                           |
 | `403` | CSRF validation failed. Object authorization failures do not use this code. |
-| `404` | Vacancy unavailable or draft/resource intentionally hidden. |
-| `409` | Active-vacancy mismatch, stale draft version, or invalid resource state. |
-| `413` | Request or file exceeds configured limits. |
-| `415` | Declared or detected file type is unsupported. |
-| `422` | Candidate, experience, or PDF content validation failed. |
-| `428` | An unsafe mutation omitted the required `If-Match` header. |
+| `404` | Vacancy unavailable or draft/resource intentionally hidden.                 |
+| `409` | Active-vacancy mismatch, stale draft version, or invalid resource state.    |
+| `413` | Request or file exceeds configured limits.                                  |
+| `415` | Declared or detected file type is unsupported.                              |
+| `422` | Candidate, experience, or PDF content validation failed.                    |
+| `428` | An unsafe mutation omitted the required `If-Match` header.                  |
 
 ## Explicitly Deferred
 

@@ -3,29 +3,34 @@
 ApplyFlow is a candidate-facing vacancy and job application experience built around a short,
 transparent application process.
 
-Phase 2 implementation is complete. A Nuxt 4 frontend implements vacancy discovery and a four-step
-application flow using fictional fixtures and simulated services. A Django 5.2 backend foundation
-provides domain models, initial migrations, Django Admin registration, a health endpoint, and
-read-only vacancy APIs. The Phase 3 architecture and implementation plan for authorized drafts and
-private CV handling is ready for review, but implementation has not started. The frontend is not
-connected to the backend, and authorized drafts, uploads, real submission, deployment, and
-production operations remain unimplemented.
+Phase 3 implementation is in progress. A Nuxt 4 frontend implements vacancy discovery and a
+four-step application flow. Django 5.2 and DRF provide health, vacancy, anonymous draft,
+experience-entry, and private singleton CV metadata/upload/delete APIs. The current frontend uses
+the real vacancy, draft, experience, employment-entry, CV, conflict, and abandonment APIs through a
+same-origin `/api/v1/` boundary. Final submission, private status lookup, deployment, cleanup
+scheduling, monitoring, backups, and PostgreSQL runtime validation remain unimplemented.
 
 ## Current Frontend
 
 The frontend currently includes:
 
-- Home, vacancy index, and vacancy detail pages.
-- Position, candidate details, experience, and review application routes.
+- API-backed home, vacancy index, and vacancy detail pages.
+- Position, candidate details, experience, and review application routes backed by authorized
+  server drafts.
 - Client-side validation with error summaries and grouped-control associations.
-- In-memory draft state for the current browser tab.
-- PDF file-selection validation and metadata display without uploading file contents.
-- Simulated save, submission, confirmation, and private status lookup behavior.
+- In-memory draft aggregate restored from the authorized active-draft endpoint.
+- Candidate, experience, optional employment-entry, CV upload/replacement/deletion, and abandonment
+  integration.
+- XHR upload progress and cancellation for CV files.
+- Submission and private status lookup routes that remain intentionally unavailable.
 - Loading, empty, unavailable, validation, save-failure, upload-failure, and success states.
 - Responsive layouts from 320px upward, keyboard navigation, route focus, and reduced-motion support.
-- Vitest component tests and Playwright browser tests.
+- Vitest component/unit tests, mocked Playwright browser tests, and a real Django full-stack
+  Playwright smoke harness.
 
-All vacancies, credentials, candidate details, and status responses are fictional.
+Seeded test vacancies and example candidate values are fictional. Do not use ApplyFlow with real
+candidate information until the remaining privacy, legal, accessibility, operational, and
+production-readiness gates are complete.
 
 ## Architecture
 
@@ -34,21 +39,23 @@ Frontend application code lives under `frontend/app/` and follows Nuxt 4 convent
 - `pages/` owns route-level behavior and metadata.
 - `components/` owns focused, accessible interface elements.
 - `composables/` coordinates vacancy and application state across routes.
-- `services/` provides typed fixture-backed boundaries that can later be replaced by API calls.
+- `api/` provides typed same-origin API clients, CSRF bootstrap, response guards, and upload
+  transport.
+- `branding/` provides source-controlled brand and presentation configuration.
 - `utils/` contains validation, cloning, and focus behavior.
 - `types/` defines the shared frontend domain model.
 
-The current draft is held in Nuxt state for the browser session. Candidate data and credentials are
-not written to localStorage.
+The current draft is held in Nuxt state and rehydrated from the backend active-draft endpoint.
+Candidate data, draft credentials, CSRF tokens, document storage keys, and status secrets are not
+written to localStorage or sessionStorage. The draft ownership credential is HttpOnly and
+browser-managed.
 
 The backend lives under `backend/` and uses Django, Django REST Framework, and PostgreSQL-ready
 settings. SQLite is the local bootstrap and test database. PostgreSQL runtime behavior has not been
-validated in this phase. The current API exposes only health and read-only published-vacancy routes;
-fixture-backed frontend behavior remains unchanged. The approved Phase 3 plan keeps a same-origin
-modular monolith with one active browser-owned draft at a time, a host-only HttpOnly ownership
-cookie, seven-day inactivity expiry bounded by a thirty-day absolute lifetime and the vacancy
-deadline, `ETag`/`If-Match` optimistic concurrency, and singleton private CV metadata endpoints with
-no candidate download route.
+validated in this phase. The API keeps a same-origin modular monolith with one active browser-owned
+draft at a time, a host-only HttpOnly ownership cookie, seven-day inactivity expiry bounded by a
+thirty-day absolute lifetime and the vacancy deadline, `ETag`/`If-Match` optimistic concurrency, and
+singleton private CV metadata/upload/delete endpoints with no candidate download route.
 
 Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
 
@@ -83,8 +90,8 @@ Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
     |   |-- components/
     |   |-- composables/
     |   |-- pages/
-    |   |-- plugins/
-    |   |-- services/
+    |   |-- api/
+    |   |-- branding/
     |   |-- types/
     |   `-- utils/
     |-- tests/
@@ -92,8 +99,10 @@ Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
     |   |-- fixtures/
     |   `-- unit/
     |-- nuxt.config.ts
+    |-- playwright.fullstack.config.ts
     |-- package.json
     |-- playwright.config.ts
+    |-- proxy-target.ts
     `-- vitest.config.ts
 ```
 
@@ -129,8 +138,15 @@ npm run test:e2e      # Run Playwright browser tests
 npm run build         # Create the Nuxt production build
 ```
 
-Playwright starts the Nuxt development server automatically on `127.0.0.1:3000`. Browser-review
-screenshots are written under `frontend/tests/screenshots/` and are ignored by Git.
+Playwright starts the Nuxt development server automatically on `127.0.0.1:3000`. The full-stack
+smoke harness starts Django and Nuxt against a temporary SQLite database and private document root:
+
+```powershell
+npm run test:e2e:fullstack
+```
+
+Browser-review screenshots and Playwright traces are generated artifacts and are ignored by Git
+unless a failure output directory is intentionally inspected during debugging.
 
 ## Backend Setup
 
@@ -164,17 +180,29 @@ Backend quality commands:
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
-## Simulated Behavior And Limitations
+## Replacing Or Redesigning The Frontend
 
-- Draft answers last only while the current application state remains in memory.
-- Selecting a PDF reads browser-provided file metadata only; no file is uploaded or stored.
-- Save and submission delays are fixture behavior, not API calls.
-- Confirmation credentials and status responses are fixed fictional values.
+The frontend is replaceable. Visual redesigns, component changes, and source-controlled
+white-label variants can stay frontend-only when they preserve the API and security contract.
+
+Read [the frontend integration contract](docs/frontend-integration/README.md) before frontend
+architecture or integration changes. Major redesigns should use a parallel `frontend-v2` until the
+documented cutover checks pass. Normal frontend redesigns do not require backend or database
+changes. Persisted-field changes, endpoint changes, draft-security changes, upload-policy changes,
+or API-semantic changes require coordinated backend work.
+
+## Implemented Boundaries And Limitations
+
+- Draft answers persist in authorized server drafts while the draft cookie and server lifecycle
+  remain valid.
+- Selecting a valid PDF uploads to private backend-managed storage and returns metadata only.
+- Save operations for implemented draft fields are real API calls.
+- Submission credentials and status lookup are not implemented.
 - Client validation improves feedback but is not a security boundary.
-- Server-side authorization, upload inspection, rate limiting, persistence, retention, and duplicate
-  submission workflows are not connected to the frontend.
-- Backend models exist, but anonymous draft authorization, status lookup, CV upload/storage, and
-  submission services remain future work.
+- Server-side authorization, retention, CSRF, ETags, PDF validation, and private storage are
+  implemented for Phase 3 draft and CV APIs.
+- Cleanup command execution, production rate limiting, duplicate final submission workflows,
+  PostgreSQL runtime validation, and deployment remain future work.
 - No usability study or accessibility conformance audit has been completed.
 - No CI, deployment, production database, or validated operational staff workflow exists; Django
   Admin registration is a foundation only.
@@ -185,6 +213,7 @@ Do not use the current frontend to collect real candidate information.
 
 - [Product brief](docs/product-brief.md)
 - [Frontend architecture](docs/frontend-architecture.md)
+- [Frontend integration contract](docs/frontend-integration/README.md)
 - [Accessibility plan](docs/accessibility.md)
 - [Testing strategy](docs/testing-strategy.md)
 - [Upload security](docs/upload-security.md)

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { fixtureApplicationService } from '~/services/application-service'
+import { ApplyFlowApiError } from '~/api/errors'
 import type { CandidateDetails } from '~/types/domain'
+import { mapCandidateApiErrors } from '~/utils/api-field-errors'
 import { cloneData } from '~/utils/clone-data'
 import { validateCandidateDetails, type FieldErrors } from '~/utils/validation'
 
 const route = useRoute()
 const { vacancy } = await useVacancyPage({ activeOnly: true })
-const { draft, enterApplicationStep, saveState, updateCandidate } = useApplicationDraft()
+const { draft, enterApplicationStep, saveState, saveCandidate } = useApplicationDraft()
 if (vacancy.value) await enterApplicationStep(vacancy.value.slug)
 const form = reactive<CandidateDetails>(cloneData(draft.value.candidate))
 const errors = ref<FieldErrors>({})
@@ -30,16 +31,15 @@ const submit = async () => {
     return
   }
 
-  updateCandidate(form)
-  saveState.value = 'saving'
   try {
-    await fixtureApplicationService.saveDraft(draft.value)
-    saveState.value = 'saved'
+    await saveCandidate(form)
     const destination = route.query.return === 'review' ? 'review' : 'experience'
     await navigateTo(`/apply/${vacancy.value?.slug}/${destination}`)
-  } catch {
-    saveState.value = 'error'
-    serverError.value = 'save_failed'
+  } catch (error) {
+    if (error instanceof ApplyFlowApiError && Object.keys(error.fields).length) {
+      errors.value = mapCandidateApiErrors(error.fields)
+    }
+    serverError.value = error instanceof ApplyFlowApiError ? error.code : 'save_failed'
     await nextTick()
     await saveFailure.value?.focus()
   }

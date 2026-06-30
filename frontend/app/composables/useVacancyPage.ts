@@ -1,4 +1,4 @@
-import { fixtureVacancyService } from '~/services/vacancy-service'
+import { apiVacancyService } from '~/api/vacancies'
 
 interface VacancyPageOptions {
   activeOnly?: boolean
@@ -12,8 +12,8 @@ export const useVacancyPage = async (options: VacancyPageOptions = {}) => {
     () => `${keyPrefix}-${slug.value}`,
     () =>
       options.activeOnly
-        ? fixtureVacancyService.getActiveBySlug(slug.value)
-        : fixtureVacancyService.getBySlug(slug.value),
+        ? apiVacancyService.getActiveBySlug(slug.value)
+        : apiVacancyService.getBySlug(slug.value),
     { watch: [slug] },
   )
   return { vacancy, slug }

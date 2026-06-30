@@ -1,4 +1,9 @@
-import type { CandidateDetails, ExperienceData, UploadedDocumentMetadata } from '~/types/domain'
+import type {
+  CandidateDetails,
+  ExperienceData,
+  ExperienceEntry,
+  UploadedDocumentMetadata,
+} from '~/types/domain'
 
 export type FieldErrors = Record<string, string>
 
@@ -41,6 +46,29 @@ export const validateExperience = (
   if (!document) errors.document = 'Upload a PDF CV under 5 MB.'
   if (!experience.consentAcknowledged) {
     errors.consentAcknowledged = 'Review the privacy acknowledgement before continuing.'
+  }
+  return errors
+}
+
+const monthPattern = /^[0-9]{4}-(0[1-9]|1[0-2])$/
+
+export const validateExperienceEntry = (entry: ExperienceEntry): FieldErrors => {
+  const errors: FieldErrors = {}
+  if (!entry.organization.trim()) errors.organization = 'Enter the organization name.'
+  if (!entry.roleTitle.trim()) errors.roleTitle = 'Enter your role title.'
+  if (!monthPattern.test(entry.startMonth)) errors.startMonth = 'Enter a start month in YYYY-MM.'
+  if (!entry.isCurrent && !monthPattern.test(entry.endMonth)) {
+    errors.endMonth = 'Enter an end month in YYYY-MM, or mark the role current.'
+  }
+  if (
+    entry.startMonth &&
+    entry.endMonth &&
+    !entry.isCurrent &&
+    monthPattern.test(entry.startMonth) &&
+    monthPattern.test(entry.endMonth) &&
+    entry.endMonth < entry.startMonth
+  ) {
+    errors.endMonth = 'Choose an end month that is the same as or after the start month.'
   }
   return errors
 }

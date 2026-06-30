@@ -1,21 +1,41 @@
 :root {
-  --color-canvas: #f3f0e8;
-  --color-surface: #fffdf8;
-  --color-surface-secondary: #e8e3d8;
-  --color-ink: #181814;
-  --color-ink-muted: #5e5c54;
-  --color-divider: #aaa69b;
-  --color-divider-strong: #36362f;
-  --color-signal: #1f5d4a;
-  --color-signal-hover: #164536;
-  --color-signal-active: #10372b;
-  --color-focus: #005fcc;
-  --color-success: #246346;
-  --color-warning: #8a5b00;
-  --color-danger: #a12b2b;
-  --color-danger-hover: #842222;
-  --color-danger-active: #681919;
-  --color-pending: #665a8f;
+  --brand-page-background: #f3f0e8;
+  --brand-surface: #fffdf8;
+  --brand-surface-muted: #e8e3d8;
+  --brand-text: #181814;
+  --brand-text-muted: #5e5c54;
+  --brand-border: #aaa69b;
+  --brand-border-strong: #36362f;
+  --brand-primary: #1f5d4a;
+  --brand-primary-hover: #164536;
+  --brand-primary-active: #10372b;
+  --brand-primary-text: #fffdf8;
+  --brand-focus: #005fcc;
+  --brand-danger: #a12b2b;
+  --brand-danger-hover: #842222;
+  --brand-danger-active: #681919;
+  --brand-warning: #8a5b00;
+  --brand-success: #246346;
+  --brand-pending: #665a8f;
+  --brand-font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --brand-font-heading: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --color-canvas: var(--brand-page-background, #f3f0e8);
+  --color-surface: var(--brand-surface, #fffdf8);
+  --color-surface-secondary: var(--brand-surface-muted, #e8e3d8);
+  --color-ink: var(--brand-text, #181814);
+  --color-ink-muted: var(--brand-text-muted, #5e5c54);
+  --color-divider: var(--brand-border, #aaa69b);
+  --color-divider-strong: var(--brand-border-strong, #36362f);
+  --color-signal: var(--brand-primary, #1f5d4a);
+  --color-signal-hover: var(--brand-primary-hover, #164536);
+  --color-signal-active: var(--brand-primary-active, #10372b);
+  --color-focus: var(--brand-focus, #005fcc);
+  --color-success: var(--brand-success, #246346);
+  --color-warning: var(--brand-warning, #8a5b00);
+  --color-danger: var(--brand-danger, #a12b2b);
+  --color-danger-hover: var(--brand-danger-hover, #842222);
+  --color-danger-active: var(--brand-danger-active, #681919);
+  --color-pending: var(--brand-pending, #665a8f);
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -31,8 +51,22 @@
   --radius-medium: 0.45rem;
   --transition-fast: 160ms;
   --focus-outline: 3px solid var(--color-focus);
-  --font-interface: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-editorial: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --font-interface: var(
+    --brand-font-body,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif
+  );
+  --font-editorial: var(
+    --brand-font-heading,
+    'Iowan Old Style',
+    'Palatino Linotype',
+    'Book Antiqua',
+    Georgia,
+    serif
+  );
 }
 
 *,
@@ -715,6 +749,17 @@ input[type='checkbox'] {
   gap: var(--space-4);
 }
 
+.upload-progress {
+  display: grid;
+  width: 100%;
+  gap: var(--space-2);
+}
+
+.upload-progress progress {
+  width: 100%;
+  accent-color: var(--color-signal);
+}
+
 .upload-empty p,
 .upload-result span {
   display: block;
@@ -725,7 +770,41 @@ input[type='checkbox'] {
 
 .inline-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.entry-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  background: var(--color-page);
+}
+
+.entry-card span,
+.entry-card small {
+  display: block;
+  color: var(--color-ink-muted);
+}
+
+.entry-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.check-row--inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .empty-state,

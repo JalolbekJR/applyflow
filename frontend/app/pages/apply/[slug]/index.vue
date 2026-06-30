@@ -1,7 +1,8 @@
 <script setup lang="ts">
 const { vacancy } = await useVacancyPage({ activeOnly: true })
-const { draft, saveState, selectVacancy, resetDraft } = useApplicationDraft()
+const { draft, saveState, enterApplicationStep, abandonServerDraft } = useApplicationDraft()
 const confirmAbandon = ref(false)
+const startState = ref<'loading' | 'ready' | 'conflict' | 'unavailable'>('loading')
 
 const hasConflict = computed(
   () =>
@@ -11,8 +12,13 @@ const hasConflict = computed(
 
 watch(
   vacancy,
-  (verifiedVacancy) => {
-    if (verifiedVacancy && !hasConflict.value) selectVacancy(verifiedVacancy.slug)
+  async (verifiedVacancy) => {
+    if (!verifiedVacancy) {
+      startState.value = 'unavailable'
+      return
+    }
+    const result = await enterApplicationStep(verifiedVacancy.slug)
+    startState.value = result === 'conflicting-draft' ? 'conflict' : 'ready'
   },
   { immediate: true },
 )
@@ -23,10 +29,12 @@ useSeoMeta({
 })
 
 const continueExisting = () => navigateTo(`/apply/${draft.value.vacancySlug}/details`)
-const abandonAndStart = () => {
+const abandonAndStart = async () => {
   if (!vacancy.value) return
-  resetDraft(vacancy.value.slug)
+  await abandonServerDraft()
+  await enterApplicationStep(vacancy.value.slug)
   confirmAbandon.value = false
+  startState.value = 'ready'
 }
 </script>
 
@@ -39,12 +47,16 @@ const abandonAndStart = () => {
     intro="Confirm the role and what you will need. Position is the first of four application steps."
     :save-state="saveState"
   >
-    <section v-if="hasConflict" class="conflict-state" aria-labelledby="conflict-title">
+    <section
+      v-if="hasConflict || startState === 'conflict'"
+      class="conflict-state"
+      aria-labelledby="conflict-title"
+    >
       <p class="eyebrow">Existing application</p>
       <h2 id="conflict-title">You already started another application</h2>
       <p>
         Continue the existing application without losing your work, or abandon it before starting
-        this role. This simulated frontend keeps one draft in the current tab.
+        this role. ApplyFlow keeps one active server draft for this browser.
       </p>
       <div class="conflict-comparison">
         <div>
@@ -68,8 +80,8 @@ const abandonAndStart = () => {
         </button>
       </div>
       <div v-if="confirmAbandon" class="destructive-confirmation" role="alert">
-        <h3>Delete the current simulated draft?</h3>
-        <p>Candidate answers and selected file metadata in this browser tab will be cleared.</p>
+        <h3>Delete the current draft?</h3>
+        <p>Candidate answers and uploaded CV metadata for the current draft will be abandoned.</p>
         <div class="inline-actions">
           <button class="button button--secondary" type="button" @click="confirmAbandon = false">
             Keep draft
@@ -105,17 +117,16 @@ const abandonAndStart = () => {
       <section class="context-note" aria-labelledby="draft-note-title">
         <h2 id="draft-note-title">About saving in this frontend</h2>
         <p>
-          Answers are kept only in memory while this browser tab remains open. The future Django
-          service will provide protected server-side drafts; this build does not claim real
-          persistence.
+          Answers are saved to a protected same-origin draft. Reloading restores the active draft
+          while the server-side ownership cookie remains valid.
         </p>
       </section>
 
       <section class="context-note" aria-labelledby="privacy-note-title">
         <h2 id="privacy-note-title">What stays private later</h2>
         <p>
-          CV files will require private storage and authorized staff access. This frontend reads
-          only file metadata and does not upload file contents.
+          CV files are uploaded to private backend storage. This frontend never receives a storage
+          key, checksum, document ID, path, preview, or download URL.
         </p>
       </section>
 

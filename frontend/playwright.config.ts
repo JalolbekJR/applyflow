@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: /slice7-fullstack\.spec\.ts/,
   outputDir: './test-results',
   fullyParallel: false,
   workers: 1,

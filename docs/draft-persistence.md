@@ -4,12 +4,12 @@ See [ADR 0004](decisions/0004-draft-persistence.md).
 
 ## Options
 
-| Option | Privacy | Recovery | Complexity | Decision |
-| --- | --- | --- | --- | --- |
-| Client-only temporary draft | Sensitive data may end up in browser storage. | Same browser only, fragile. | Low. | Rejected. |
-| Anonymous server-side draft | Sensitive data stays server-side. | Same browser recovery with secure cookie. | Medium. | Selected. |
-| Authenticated account draft | Strong identity model. | Cross-device recovery. | High. | Rejected for version one. |
-| No persistent draft | Minimal data retention. | Poor after errors or refresh. | Low. | Rejected. |
+| Option                      | Privacy                                       | Recovery                                  | Complexity | Decision                  |
+| --------------------------- | --------------------------------------------- | ----------------------------------------- | ---------- | ------------------------- |
+| Client-only temporary draft | Sensitive data may end up in browser storage. | Same browser only, fragile.               | Low.       | Rejected.                 |
+| Anonymous server-side draft | Sensitive data stays server-side.             | Same browser recovery with secure cookie. | Medium.    | Selected.                 |
+| Authenticated account draft | Strong identity model.                        | Cross-device recovery.                    | High.      | Rejected for version one. |
+| No persistent draft         | Minimal data retention.                       | Poor after errors or refresh.             | Low.       | Rejected.                 |
 
 ## Selected Approach
 
@@ -31,7 +31,9 @@ Use anonymous server-side drafts with:
 - Expiry refreshed only by successful meaningful mutations; reads do not renew retention.
 - Django CSRF middleware plus an in-memory masked token sent as `X-CSRFToken` for every unsafe
   request.
-- Cleanup of expired drafts and abandoned documents.
+- Immediate authorized-path revocation, scrubbing, logical document deletion, storage deletion
+  attempts where supported, and durable pending-deletion state.
+- Planned Slice 8 batch cleanup for inaccessible expired drafts, retryable blobs, and stale orphans.
 - Explicit structured candidate fields as defined in [domain model](domain-model.md).
 
 ## Concurrency
@@ -101,9 +103,9 @@ separate ports. Local HTTP is the only environment where the ownership cookie ma
 `Secure=False`; all other attributes remain unchanged. CORS and JavaScript-readable ownership
 tokens are not fallbacks.
 
-## Cleanup
+## Deferred Cleanup
 
-Expired draft cleanup should:
+Expired draft cleanup remains planned Slice 8 work. It should:
 
 - Revoke the credential and scrub candidate fields before storage work can be retried.
 - Delete experience entries and logically remove the active document.
@@ -113,9 +115,11 @@ Expired draft cleanup should:
 - Record privacy-safe cleanup counts.
 - Avoid logging candidate fields.
 
-Cleanup is an idempotent, batch-bounded Django management command with dry-run output in Phase 3.
-Scheduling and queue infrastructure remain deferred.
+Cleanup is planned as an idempotent, batch-bounded Django management command with dry-run output.
+The command, scheduling, and queue infrastructure remain deferred.
 
 ## Implementation Cost
 
-Server-side drafts add models, cookie handling, authorization checks, and cleanup tests. The trade-off is acceptable because ApplyFlow's core product promise depends on preserving work after recoverable errors.
+Server-side drafts add models, cookie handling, authorization checks, current lifecycle tests, and a
+future cleanup-command test obligation. The trade-off is acceptable because ApplyFlow's core product
+promise depends on preserving work after recoverable errors.

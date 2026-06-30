@@ -16,16 +16,18 @@ Reference: [W3C WCAG 2.2](https://www.w3.org/TR/WCAG22/).
 - Error summaries that receive focus and link to invalid destinations.
 - `fieldset` and `legend` semantics for radio and consent groups.
 - `aria-describedby` and `aria-invalid` relationships for invalid controls.
-- Text announcements for save, upload, submission, copy, and status behavior.
-- Keyboard-operable file selection, application navigation, and submission.
+- Text announcements for save, upload, conflict, disabled submission, and deferred status behavior.
+- Keyboard-operable file selection, application navigation, employment-entry controls, and review
+  editing.
 - Reduced-motion handling and mobile targets sized toward 44 CSS pixels.
 - Responsive layouts from 320px upward without CSS reordering that conflicts with DOM order.
 
 ## Automated Coverage
 
-Vitest checks error-summary focus and targets, file-selection states, and credential copy recovery.
-Playwright checks keyboard navigation, route focus, grouped-field relationships, save-failure focus,
-mobile vacancy order, footer target height, and 320px horizontal reflow.
+Vitest checks error-summary focus and targets, file-selection states, API field-error mapping, save
+state messaging, and brand validation. Playwright includes routed API browser smoke coverage and a
+real Django full-stack Slice 7 flow. These checks support regression review, but they are not a
+formal accessibility conformance audit.
 
 ## Manual Review Still Required
 

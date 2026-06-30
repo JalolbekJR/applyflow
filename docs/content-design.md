@@ -16,16 +16,16 @@ Avoid words and phrases such as rockstar, ninja, revolutionary, next-generation,
 
 ## Field Labels And Hints
 
-| Field | Label | Hint |
-| --- | --- | --- |
-| Full name | Full name | Use the name you want us to use when contacting you. |
-| Email | Email address | We use this for application updates and duplicate-submission checks. |
-| Phone | Phone number | Optional. Add it only if phone contact is okay. |
-| Profile link | Portfolio, GitHub, or LinkedIn | Add one link that best represents your work. |
-| Preferred contact | Preferred contact method | Tell us how you would rather hear from us. |
-| CV | CV upload | PDF only. Maximum planned size: 5 MB. |
-| Skills | Relevant skills | Add the skills most connected to this role. |
-| Message | Short message | Optional. Use this for context not obvious in your CV. |
+| Field             | Label                          | Hint                                                                 |
+| ----------------- | ------------------------------ | -------------------------------------------------------------------- |
+| Full name         | Full name                      | Use the name you want us to use when contacting you.                 |
+| Email             | Email address                  | We use this for application updates and duplicate-submission checks. |
+| Phone             | Phone number                   | Optional. Add it only if phone contact is okay.                      |
+| Profile link      | Portfolio, GitHub, or LinkedIn | Add one link that best represents your work.                         |
+| Preferred contact | Preferred contact method       | Tell us how you would rather hear from us.                           |
+| CV                | CV upload                      | PDF only. Maximum size: 5 MB.                                        |
+| Skills            | Relevant skills                | Add the skills most connected to this role.                          |
+| Message           | Short message                  | Optional. Use this for context not obvious in your CV.               |
 
 ## Error Examples
 
@@ -38,7 +38,10 @@ Avoid words and phrases such as rockstar, ninja, revolutionary, next-generation,
 - Review the privacy acknowledgement before submitting.
 - We could not save your draft. Your answers are still visible. Try again.
 
-## Confirmation Copy
+## Deferred Phase 4 Confirmation Copy
+
+The following copy is illustrative only. It must not appear as a real success state until final
+submission and private status lookup are implemented and verified.
 
 Example:
 

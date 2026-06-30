@@ -22,7 +22,7 @@ See [field inventory](field-inventory.md) for purpose, validation, privacy class
 
 ## Draft Retention
 
-Phase 3 planned rule:
+Phase 3 rule:
 
 - Drafts expire after seven days without a successful meaningful mutation, thirty days after
   creation, or at the vacancy application deadline, whichever comes first.
@@ -74,7 +74,12 @@ Store the consent version accepted at submission. If privacy wording changes, a 
 
 ## Status Lookup
 
-Status lookup uses a readable `application_reference` and a separate high-entropy `status_lookup_secret`. The reference helps support; the secret authorizes status access. Email is not treated as a secret. Responses reveal only:
+Status lookup remains Phase 4. The Phase 3 frontend does not fabricate an application reference,
+status lookup secret, or successful status result.
+
+The planned Phase 4 design uses a readable `application_reference` and a separate high-entropy
+`status_lookup_secret`. The reference helps support; the secret authorizes status access. Email is
+not treated as a secret. Responses should reveal only:
 
 - Public status label.
 - Vacancy title.
@@ -99,9 +104,11 @@ Do not show:
 - Status lookup requires correct lookup credentials.
 
 Phase 3 backend slices implement candidate draft authorization and authorized CV metadata, upload,
-replacement, and deletion. Status-secret lookup, staff document download, and frontend API
-integration remain unimplemented. The frontend remains fixture-backed and must not collect real
-candidate data.
+replacement, and deletion. Slice 7 connects the candidate frontend to the real vacancy, draft,
+experience-entry, CV, and abandonment APIs. Status-secret lookup, final submission, staff document
+download, cleanup processing, production deployment, and runtime multi-company configuration remain
+unimplemented. ApplyFlow still must not collect real candidate data until the remaining privacy,
+legal, accessibility, operational, and production-readiness gates are complete.
 
 Phase 3 ownership is one active draft per browser. The browser receives a host-only HttpOnly cookie
 containing a versioned draft UUID plus a 256-bit random secret; only the secret hash is stored. The

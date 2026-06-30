@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useBrand } from '~/branding/useBrand'
+
 const route = useRoute()
 const { vacancy } = await useVacancyPage()
+const brand = useBrand()
 const isUnavailable = computed(
   () =>
     !vacancy.value ||
@@ -10,7 +13,7 @@ const isUnavailable = computed(
 
 useSeoMeta({
   title: () =>
-    vacancy.value ? `${vacancy.value.title} - Northline Studio` : 'Vacancy unavailable',
+    vacancy.value ? `${vacancy.value.title} - ${brand.pageTitleSuffix}` : 'Vacancy unavailable',
   description: () => vacancy.value?.summary ?? 'This vacancy is not available.',
 })
 </script>
@@ -39,7 +42,8 @@ useSeoMeta({
           <p>You will need contact details, relevant skills, and one PDF CV under 5 MB.</p>
           <NuxtLink class="button" :to="`/apply/${vacancy.slug}`">Start application</NuxtLink>
           <p class="supporting-note">
-            Saving and submission are simulated in the current frontend.
+            Draft saving and CV upload use the implemented secure draft APIs. Final submission is
+            planned for Phase 4.
           </p>
         </template>
       </aside>

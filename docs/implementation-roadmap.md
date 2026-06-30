@@ -1,7 +1,7 @@
 # Implementation Roadmap
 
-This roadmap separates the implemented frontend foundation from simulated behavior and future
-backend work. Phase changes require an explicit scope decision.
+This roadmap separates implemented behavior from deferred and production-readiness work. Phase
+changes require an explicit scope decision.
 
 ## Phase 0 - Product And Architecture Foundation
 
@@ -90,9 +90,13 @@ Production database or migration actions require separate approval.
 
 ## Phase 3 - Secure Drafts And Private CV Upload
 
-Status: in progress. Slices 1-6 are implemented in the backend foundation. Phase 3 overall remains
-in progress until frontend integration, cleanup, final regression review, and documentation
-reconciliation are complete.
+Status: in progress. Slices 1-7 are implemented for their approved technical scope: backend Slices
+1-6 provide secure drafts, bounded experience entries, private storage, PDF validation, and document
+mutation APIs; Slice 7 provides the real Nuxt-to-Django frontend integration, automated
+stabilization, frontend replacement documentation, and current-state reconciliation. Phase 3 remains
+open because Slice 8 cleanup is not implemented. Final Phase 3 handoff depends on cleanup
+implementation and review of that slice. Manual accessibility review and PostgreSQL
+runtime/concurrency verification remain separate unverified tracks.
 
 Objective: replace in-memory fixture draft persistence with authorized, expiring server-side drafts,
 bounded employment entries, and private PDF upload/metadata/replacement/deletion while preserving
@@ -125,31 +129,35 @@ Accepted planning decisions:
   public, and staff document download are excluded from Phase 3.
 - The first checksum migration leaves `sha256` nullable for existing metadata while service-layer
   creation requires SHA-256 for every new Phase 3 upload.
-- Submission and status lookup remain visibly simulated in the frontend until Phase 4.
+- Submission and status lookup remain unavailable until Phase 4; the frontend does not fabricate
+  application references, status lookup secrets, or successful status results.
 
-Still deferred:
+Still deferred in Phase 3:
 
-- Frontend integration with the draft and document APIs.
 - Cleanup management command and stale-orphan cleanup.
-- Submission, deployment, monitoring, and PostgreSQL runtime verification.
+- Manual accessibility review beyond automated and focused browser checks.
+- PostgreSQL runtime/concurrency verification.
+- Final submission and private status lookup.
+- Deployment, monitoring, backups, CI, and other production-readiness work remain later tracks unless
+  an explicit scope decision makes them Phase 3 blockers.
 
 ### Implementation Slices
 
 Each slice requires its own review before the next security boundary depends on it. Model guidance
 names the preferred model for implementation support, not permission to begin work.
 
-| Slice | Scope | Dependencies | Model recommendation | Reasoning level | Expected validation |
-| --- | --- | --- | --- | --- | --- |
-| 1. Ownership and lifecycle | Cookie helpers, CSRF bootstrap, credential verification, draft version/activity/revocation, seven-day inactivity plus thirty-day absolute expiry, deadline bound, and generic unavailable behavior. | Phase 2 models and ADRs 0004/0009. | GPT-5.5 | High; authorization and lifecycle edge cases are security-critical. | Model/service tests, CSRF enforcement, cookie-attribute assertions, cross-draft/cross-vacancy tests, Django checks. |
-| 2. Draft API | Create/resolve/read, candidate and experience-summary PATCH, API error/request-ID integration, no-store responses. | Slice 1. | GPT-5.5 | High; every endpoint must preserve enumeration-safe authorization. | API matrix, stale-version conflicts, validation mapping, unsupported methods, lint/format/tests. |
-| 3. Experience persistence | `DraftExperienceEntry`, migration, bounded CRUD/reorder, and parent-version increments. Frontend integration remains part of Slice 7. | Slices 1-2. | GPT-5.4 | Medium; conventional child CRUD with explicit constraints. | Migration dry-run, model constraints, ownership and count-cap API tests, frontend unit tests when integration begins. |
-| 4. Private storage abstraction | Complete: provider-neutral interface, private local adapter, ignored root, fake/test adapter, canonical key generation, and configuration validation. No upload endpoint or document download was added. | Slice 1. | GPT-5.5 | High; storage-path and privacy boundaries must be exact. | Traversal/key tests, no public route, adapter contract tests, configuration checks. |
-| 5. Upload validation | Complete: size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, strict `pypdf==6.14.1` validation, and no endpoint/storage/DB write. | Slice 4 and the reviewed base parser package. | GPT-5.5 | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging. |
-| 6. Document mutation API | Complete: singleton CV metadata/read, create, replace, logical delete, abandonment retirement, bounded collision retry, compensation, row locks, active uniqueness, and retryable physical-deletion metadata. | Slices 1, 2, 4, and 5. | GPT-5.5 | High; database and external storage cannot share one transaction. | Failure-injection tests, conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests, admin privacy checks. |
-| 7. Frontend integration | Real draft service/composable, browser-only bootstrap, 800 ms autosave, route refresh, conflict/expiry UI, experience CRUD, XHR upload progress/retry/cancel/replace/delete. | Stable API from slices 2, 3, and 6. | GPT-5.4 for primary work; GPT-5.5 for conflict/security review. | High; state recovery and accessibility cross multiple routes. | Format, lint, typecheck, Vitest, build, Playwright candidate flow, responsive/reduced-motion/manual screen-reader spot checks. |
-| 8. Cleanup | Idempotent dry-run/batched management command, revoke/scrub, pending blob deletion, stale-orphan grace period, aggregate logs. | Slices 1, 4, and 6. | GPT-5.5 | High; deletion failures must not leak data or lose cleanup keys. | Dry-run/apply tests, repeated-run tests, storage-failure retries, cleanup eligibility, privacy-log assertions. |
-| 9. Security and regression tests | Complete authorization, CSRF, upload, race, logging, admin, and existing Phase 1/2 regression matrix. | Slices 1-8. | GPT-5.5 | High; independent adversarial review is needed before handoff. | Full backend/frontend suites; PostgreSQL-specific plan executed when an approved service exists; browser interaction review. |
-| 10. Documentation reconciliation | Align README/current-state copy, contracts, runbook outline, settings inventory, and deferred claims with implemented evidence. | Slices 1-9 passing. | GPT-5.4 | Medium; accuracy and handoff consistency are primary. | Link review, `git diff --check`, documentation search for stale simulation/implementation claims. |
+| Slice                            | Scope                                                                                                                                                                                                                                                                                                                                                                                                   | Dependencies                                                   | Model recommendation                                            | Reasoning level                                                          | Expected validation                                                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Ownership and lifecycle       | Cookie helpers, CSRF bootstrap, credential verification, draft version/activity/revocation, seven-day inactivity plus thirty-day absolute expiry, deadline bound, and generic unavailable behavior.                                                                                                                                                                                                     | Phase 2 models and ADRs 0004/0009.                             | GPT-5.5                                                         | High; authorization and lifecycle edge cases are security-critical.      | Model/service tests, CSRF enforcement, cookie-attribute assertions, cross-draft/cross-vacancy tests, Django checks.                                                                                                                         |
+| 2. Draft API                     | Create/resolve/read, candidate and experience-summary PATCH, API error/request-ID integration, no-store responses.                                                                                                                                                                                                                                                                                      | Slice 1.                                                       | GPT-5.5                                                         | High; every endpoint must preserve enumeration-safe authorization.       | API matrix, stale-version conflicts, validation mapping, unsupported methods, lint/format/tests.                                                                                                                                            |
+| 3. Experience persistence        | `DraftExperienceEntry`, migration, bounded CRUD, persisted `position` ordering, and parent-version increments. The current frontend does not expose dedicated drag-and-drop or manual reordering; any future reorder UI must use supported persisted `position` behavior or require a coordinated API change.                                                                                           | Slices 1-2.                                                    | GPT-5.4                                                         | Medium; conventional child CRUD with explicit constraints.               | Migration dry-run, model constraints, ownership, ordering, and count-cap API tests.                                                                                                                                                         |
+| 4. Private storage abstraction   | Complete: provider-neutral interface, private local adapter, ignored root, fake/test adapter, canonical key generation, and configuration validation. No upload endpoint or document download was added.                                                                                                                                                                                                | Slice 1.                                                       | GPT-5.5                                                         | High; storage-path and privacy boundaries must be exact.                 | Traversal/key tests, no public route, adapter contract tests, configuration checks.                                                                                                                                                         |
+| 5. Upload validation             | Complete: size/empty/extension/MIME/magic/structure/active-content checks, filename normalization, SHA-256, bounded temporary-file handling, strict `pypdf==6.14.1` validation, and no endpoint/storage/DB write.                                                                                                                                                                                       | Slice 4 and the reviewed base parser package.                  | GPT-5.5                                                         | High; hostile parser input and resource limits require defensive review. | Complete upload rejection matrix, malformed/encrypted/active PDF tests, memory/size boundaries, no secret logging.                                                                                                                          |
+| 6. Document mutation API         | Complete: singleton CV metadata/read, create, replace, logical delete, abandonment retirement, bounded collision retry, compensation, row locks, active uniqueness, and retryable physical-deletion metadata.                                                                                                                                                                                           | Slices 1, 2, 4, and 5.                                         | GPT-5.5                                                         | High; database and external storage cannot share one transaction.        | Failure-injection tests, conflict tests, old-document preservation, orphan prevention, unauthorized mutation tests, admin privacy checks.                                                                                                   |
+| 7. Frontend integration          | Complete for approved scope: real vacancy/draft/CV API modules, CSRF memory bootstrap, ETag parsing, serialized unsafe mutations, candidate/experience persistence, employment-entry CRUD wiring, XHR upload progress/cancel/replacement/deletion, abandonment, active-draft conflict, deferred Phase 4 submission/status, white-label/frontend replacement foundation, and real-stack browser harness. | Stable API from slices 2, 3, and 6.                            | GPT-5.4 for primary work; GPT-5.5 for conflict/security review. | High; state recovery and accessibility cross multiple routes.            | Automated Slice 7 validation passes: format, lint, typecheck, Vitest, build, mocked Playwright, and real Django full-stack Playwright. Manual screen-reader and broader accessibility review remain outside the automated completion claim. |
+| 8. Cleanup                       | Planned: idempotent dry-run/batched management command, revoke/scrub, pending blob deletion, stale-orphan grace period, aggregate logs.                                                                                                                                                                                                                                                                 | Slices 1, 4, and 6.                                            | GPT-5.5                                                         | High; deletion failures must not leak data or lose cleanup keys.         | Planned dry-run/apply tests, repeated-run tests, storage-failure retries, cleanup eligibility, privacy-log assertions.                                                                                                                      |
+| 9. Security and regression tests | Current Slices 1-7 security and regression coverage is implemented for approved scope. Cleanup-specific security and regression coverage remains part of Slice 8 and final Phase 3 review. PostgreSQL concurrency remains a separate unverified track, and final independent adversarial review is still required before handoff.                                                                       | Slices 1-7 for current evidence; Slice 8 for cleanup coverage. | GPT-5.5                                                         | High; independent adversarial review is needed before handoff.           | Current backend/frontend suites and Slice 7 browser checks for implemented scope; planned cleanup tests after Slice 8; PostgreSQL-specific plan executed only when an approved service exists.                                              |
+| 10. Documentation reconciliation | Current-state documentation reconciliation for Slices 1-7 is implemented, including frontend replacement documentation. A final incremental reconciliation must follow Slice 8, and final Phase 3 documentation cannot be declared complete until cleanup implementation and tests are documented.                                                                                                      | Current Slices 1-7 evidence; final pass after Slice 8.         | GPT-5.4                                                         | Medium; accuracy and handoff consistency are primary.                    | Current link/style/stale-claim checks; final Slice 8 documentation search and `git diff --check` after cleanup lands.                                                                                                                       |
 
 ### Review Gates
 
@@ -163,11 +171,15 @@ names the preferred model for implementation support, not permission to begin wo
    protection, failure cleanup, strict configuration, and no public URL capability. Slice 6 adds
    replacement compensation and retryable physical deletion metadata. Stale-orphan cleanup remains
    a later cleanup slice.
-5. **Frontend gate:** existing fixtures remain available until the real API path passes unit,
-   browser, responsive, keyboard, focus, and reduced-motion checks.
+5. **Frontend gate:** the real API path must pass unit, browser, responsive, keyboard, focus, and
+   reduced-motion checks. Fixture-backed submission/status behavior is not accepted as Slice 7
+   evidence.
 6. **Database gate:** SQLite checks may support implementation, but PostgreSQL row locking,
    concurrency, and conditional uniqueness must pass before production-readiness claims.
-7. **Phase gate:** review and submit controls remain simulated and no status API is introduced.
+7. **Phase gate:** final submission remains disabled/deferred, private status lookup remains
+   unavailable, no submission or status endpoint exists, and no fictional application reference or
+   status credential is presented as real. Fixture-backed submission/status behavior is not accepted
+   as implementation evidence.
 8. **Completion gate:** no skipped required checks, stale capability claims, public document URL, or
    logged candidate/credential/file data remains.
 
@@ -181,11 +193,12 @@ names the preferred model for implementation support, not permission to begin wo
   active-content PDFs fail safely without losing other draft data.
 - Replacement preserves the previous active document until the new one succeeds; deletion and
   cleanup remain retryable.
-- Frontend loading, autosave, conflict, expiry, upload, replacement, deletion, and failure states are
-  accessible and do not shift layout.
+- Frontend loading, save/pending, conflict, expiry, upload, replacement, deletion, and recoverable
+  failure states are accessible and do not shift layout.
 - Backend/frontend verification passes, with PostgreSQL-only evidence clearly separated if no
   approved PostgreSQL runtime is available.
-- Documentation states exactly what is implemented and what remains simulated or deferred.
+- Documentation states exactly what is implemented and what remains disabled, unavailable, or
+  deferred.
 
 ### Explicit Phase 3 Exclusions
 
@@ -197,15 +210,18 @@ names the preferred model for implementation support, not permission to begin wo
 - Production object storage, deployment, CI, scheduling, backup, or monitoring integration.
 - Malware-scanning service, quarantine workflow, OCR, CV parsing, or AI features.
 
-### Pre-Implementation Requirements
+### Remaining Implementation And Verification Requirements
 
-The plan is approved at the architecture level. Implementation still must:
+The architecture remains approved. Remaining implementation and verification work must:
 
 1. Repeat the dependency gate before changing the pinned `pypdf` release or adding parser extras.
-2. Keep `sha256` nullable in the first migration while enforcing checksums for every new accepted
-   Phase 3 upload in the service layer.
+2. Preserve checksum compatibility: `sha256` remains nullable for existing metadata while the
+   service layer enforces checksums for every new accepted Phase 3 upload.
 3. Treat PostgreSQL row-lock, concurrency, conditional-constraint, and replacement tests as a
-   separate verification track that blocks production claims, not initial coding.
+   separate verification track that blocks production claims.
+4. Implement and review Slice 8 cleanup before Phase 3 final handoff.
+5. Keep production-readiness restrictions in place until deployment, CI, monitoring, backup,
+   shared-throttling, and operations evidence exists.
 
 ### Principal Risks
 
@@ -218,7 +234,8 @@ The plan is approved at the architecture level. Implementation still must:
 - Database and storage operations cannot be one transaction; compensation and orphan cleanup must
   pass failure-injection tests.
 - SQLite cannot prove PostgreSQL locking and concurrent uniqueness behaviour.
-- Local in-memory throttling cannot support production abuse-resistance claims across workers.
+- Active shared throttling is not configured yet; production abuse-resistance claims need scoped
+  throttling and deployment-level enforcement.
 - Production HTTPS, private object-store ACLs, backups, scheduler, monitoring, and incident response
   remain unimplemented, so real candidate data remains prohibited.
 

@@ -1,13 +1,13 @@
 # Runbook Outline
 
-The Phase 1 Nuxt candidate frontend still uses fixture-backed saving, submission, and status
-behavior. Phase 2 adds the Django backend foundation, DRF configuration, database-backed domain
-models, initial migrations, Django Admin registration, health endpoint, read-only public vacancy
-API, and environment-driven PostgreSQL-ready settings. Local migrations and tests use SQLite;
-PostgreSQL runtime behavior has not been verified.
+The Nuxt candidate draft path now uses the Django vacancy, anonymous draft, employment-entry, and
+private CV metadata/upload APIs. Final submission and private status lookup remain Phase 4. Phase 2
+adds the Django backend foundation, DRF configuration, database-backed domain models, migrations,
+Django Admin registration, health endpoint, read-only public vacancy API, and
+environment-driven PostgreSQL-ready settings. Local migrations and tests use SQLite; PostgreSQL
+runtime behavior has not been verified.
 
-This remains an outline because candidate authentication and draft authorization, frontend draft
-API integration, submission and private status lookup APIs, CV upload and private object storage,
+This remains an outline because final submission, private status lookup APIs, cleanup automation,
 deployment, monitoring, backup, and operational procedures are not implemented. Exact operational
 procedures belong to the Phase 6 packaging and deployment work.
 
@@ -44,12 +44,10 @@ Later deployment smoke tests should verify:
 - Form validation works.
 - Valid CV upload succeeds.
 - Invalid upload fails safely.
-- Submission succeeds.
-- Duplicate submission is blocked.
-- Status lookup works for a valid application reference and status lookup secret.
-- Invalid status lookup does not disclose information.
+- Final submission remains disabled until Phase 4.
+- Status lookup remains unavailable until Phase 4.
 - Admin login works only for staff.
-- Uploaded document download requires authorization.
+- No public, candidate, or ordinary staff document download exists in Phase 3.
 
 ## Incident Checklist
 

@@ -1,5 +1,10 @@
+import { nuxtDevProxyTarget, validateApiProxyTarget } from './proxy-target'
+
+const apiProxyTarget = validateApiProxyTarget(process.env.NUXT_API_PROXY_TARGET)
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-06-20',
+  ssr: false,
   devtools: { enabled: false },
   modules: ['@nuxt/eslint'],
   css: ['~/assets/css/main.css'],
@@ -15,6 +20,14 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
     typeCheck: false,
+  },
+  nitro: {
+    devProxy: {
+      '/api/': {
+        target: nuxtDevProxyTarget(apiProxyTarget),
+        changeOrigin: false,
+      },
+    },
   },
   eslint: {
     config: {

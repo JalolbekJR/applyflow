@@ -1,12 +1,9 @@
 <script setup lang="ts">
-import { fixtureApplicationService } from '~/services/application-service'
 import { formatFileSize, validateCandidateDetails, validateExperience } from '~/utils/validation'
 
 const { vacancy } = await useVacancyPage({ activeOnly: true })
-const { draft, enterApplicationStep, saveState, submission } = useApplicationDraft()
+const { draft, enterApplicationStep, saveState } = useApplicationDraft()
 if (vacancy.value) await enterApplicationStep(vacancy.value.slug)
-const submitError = ref('')
-const isSubmitting = ref(false)
 
 const isComplete = computed(
   () =>
@@ -19,25 +16,8 @@ useSeoMeta({
     vacancy.value ? `Apply for ${vacancy.value.title} - Review` : 'Application unavailable',
 })
 
-const submit = async () => {
-  if (isSubmitting.value || !vacancy.value || !isComplete.value) return
-  if (
-    getApplicationDraftOwnership(draft.value.vacancySlug, vacancy.value.slug) !== 'matching-draft'
-  ) {
-    await enterApplicationStep(vacancy.value.slug)
-    return
-  }
-  isSubmitting.value = true
-  submitError.value = ''
-  try {
-    submission.value = await fixtureApplicationService.submit(draft.value, vacancy.value.title)
-    await navigateTo('/application/submitted')
-  } catch {
-    submitError.value = 'The simulated submission did not finish. Your answers are still available.'
-  } finally {
-    isSubmitting.value = false
-  }
-}
+const deferredSubmissionMessage =
+  'Final submission is not available in this Phase 3 build. Your draft is saved for review, and submission will be implemented in Phase 4.'
 </script>
 
 <template>
@@ -46,14 +26,14 @@ const submit = async () => {
     :vacancy="vacancy"
     :current-step="4"
     title="Review your application"
-    intro="Check every section before the simulated submission. Edit links return here after saving."
+    intro="Check every saved section. Edit links return here after saving."
     :save-state="saveState"
   >
     <section v-if="!isComplete" class="incomplete-notice" role="alert">
       <h2>Complete the earlier steps before submitting</h2>
       <p>
-        Candidate details, experience, consent, and one PDF are required for this simulated
-        application.
+        Candidate details, experience, consent, and one PDF are required before the future Phase 4
+        submission step.
       </p>
       <NuxtLink :to="`/apply/${vacancy.slug}/details?return=review`"
         >Return to candidate details</NuxtLink
@@ -112,25 +92,27 @@ const submit = async () => {
       </p>
       <p v-else>Not provided</p>
       <p class="supporting-note">
-        Only file metadata is held in memory. This frontend does not upload or store the PDF.
+        Only safe document metadata is shown. There is no download or preview action.
       </p>
     </section>
 
     <section class="context-note" aria-labelledby="submission-note-title">
       <h2 id="submission-note-title">Before submitting</h2>
       <p>
-        The real backend will revalidate every field, enforce duplicate protection, and store the CV
-        privately. This button completes only the simulated frontend flow.
+        Final submission, application references, and private status lookup are Phase 4 features.
+        This review screen is for checking the persisted draft only.
       </p>
     </section>
 
-    <p v-if="submitError" class="server-error" role="alert">{{ submitError }}</p>
+    <p id="deferred-submit-note" class="server-error" role="status">
+      {{ deferredSubmissionMessage }}
+    </p>
     <div class="application-actions">
       <NuxtLink class="button button--secondary" :to="`/apply/${vacancy.slug}/experience`"
         >Back</NuxtLink
       >
-      <button class="button" type="button" :disabled="!isComplete || isSubmitting" @click="submit">
-        {{ isSubmitting ? 'Submitting...' : 'Submit simulated application' }}
+      <button class="button" type="button" disabled aria-describedby="deferred-submit-note">
+        Submit application unavailable
       </button>
     </div>
   </ApplicationShell>

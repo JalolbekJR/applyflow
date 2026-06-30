@@ -15,9 +15,9 @@ useSeoMeta({ title: 'ApplyFlow product notes - Current implementation' })
     <section>
       <h2>What exists today</h2>
       <p>
-        The current Nuxt frontend is backed by fictional data and simulated services. It includes
-        responsive vacancy pages, a four-step application flow, validation states, and typed service
-        boundaries for the planned API.
+        The current Nuxt frontend uses the Django vacancy, draft, employment-entry, and private CV
+        metadata APIs for the candidate draft path. Final submission and private status lookup are
+        still future Phase 4 work.
       </p>
     </section>
     <section>
@@ -30,8 +30,9 @@ useSeoMeta({ title: 'ApplyFlow product notes - Current implementation' })
     <section>
       <h2>What comes later</h2>
       <p>
-        Django and DRF will become the source of truth for vacancies, anonymous drafts, private CV
-        storage, atomic submission, duplicate protection, and minimal status lookup.
+        Phase 4 adds atomic submission, duplicate protection, application references, and minimal
+        private status lookup. Later phases cover cleanup automation, deployment, and production
+        operations.
       </p>
     </section>
   </article>
