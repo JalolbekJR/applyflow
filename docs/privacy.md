@@ -59,10 +59,10 @@ Phase 3 has no candidate, public, or staff download endpoint and no public stora
 
 ## Deletion Workflow
 
-Later implementation should support:
+Current Phase 3 supports system cleanup for expired and abandoned draft shells through the manual
+`cleanup_application_drafts` command. Later implementation should support:
 
 - Admin-initiated deletion for demo data.
-- System deletion for expired drafts.
 - Document deletion tied to application deletion.
 - Audit events that record deletion category without personal data.
 
@@ -103,12 +103,13 @@ Do not show:
 - Documents require explicit object-level staff authorization before storage access.
 - Status lookup requires correct lookup credentials.
 
-Phase 3 backend slices implement candidate draft authorization and authorized CV metadata, upload,
-replacement, and deletion. Slice 7 connects the candidate frontend to the real vacancy, draft,
-experience-entry, CV, and abandonment APIs. Status-secret lookup, final submission, staff document
-download, cleanup processing, production deployment, and runtime multi-company configuration remain
-unimplemented. ApplyFlow still must not collect real candidate data until the remaining privacy,
-legal, accessibility, operational, and production-readiness gates are complete.
+Phase 3 backend slices implement candidate draft authorization, authorized CV metadata, upload,
+replacement, deletion, and manual cleanup processing. Slice 7 connects the candidate frontend to the
+real vacancy, draft, experience-entry, CV, and abandonment APIs. Status-secret lookup, final
+submission, staff document download, cleanup scheduling, production deployment, and runtime
+multi-company configuration remain unimplemented. ApplyFlow still must not collect real candidate
+data until the remaining privacy, legal, accessibility, operational, and production-readiness gates
+are complete.
 
 Phase 3 ownership is one active draft per browser. The browser receives a host-only HttpOnly cookie
 containing a versioned draft UUID plus a 256-bit random secret; only the secret hash is stored. The

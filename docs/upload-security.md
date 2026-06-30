@@ -90,8 +90,9 @@ Examples:
 
 Malware scanning is not part of the first local prototype unless explicitly implemented later. The project must not claim antivirus scanning exists before it does.
 
-Slice 6 adds the metadata/upload/replacement/delete API and retryable deletion-attempt metadata. It
-does not add cleanup commands, throttling infrastructure, public or staff download, or malware
+Slice 6 adds the metadata/upload/replacement/delete API and retryable deletion-attempt metadata.
+Slice 8 adds the manual cleanup command for expired drafts, pending deletions, and stale orphans. It
+does not add throttling infrastructure, public or staff download, cleanup scheduling, or malware
 scanning. The storage layer guarantees bounded chunked copying and private key handling, not parser
 sandboxing or antivirus protection.
 
@@ -121,7 +122,7 @@ document content and never returns a storage URL. Django Admin shows metadata wi
 The implemented storage interface has no public URL method and returns no filesystem path. The local
 private adapter stores only canonical keys beneath the configured private root, rejects traversal and
 symlink escape attempts before access, rejects duplicate saves, cleans temporary files after failed
-writes, and enumerates only canonical relative keys for future cleanup work.
+writes, and enumerates only canonical relative keys for cleanup work.
 
 A future staff download requires authenticated object-level permission, an attachment-only
 streaming response, safe response filename, `nosniff`, no public storage URL, and a privacy-safe
@@ -159,8 +160,8 @@ audit event. That work requires a later review and is not implied by upload impl
 - Valid upload persists metadata.
 - Failed replacement preserves the old active document.
 - Storage or metadata failure does not create an untracked live object.
-- Logs do not include file contents or storage keys.
+- Logs and cleanup command output do not include file contents or storage keys.
 
-Later cleanup tests still need stale-orphan grace-period coverage and repeated cleanup-command
-evidence. PostgreSQL-specific row-lock and concurrent replacement behavior also remains a separate
-production-readiness track.
+Cleanup tests cover stale-orphan grace-period behavior, repeated cleanup runs, storage-failure
+retry, and privacy-safe aggregate output. PostgreSQL-specific row-lock and concurrent replacement
+behavior remains a separate production-readiness track.

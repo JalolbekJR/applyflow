@@ -180,6 +180,17 @@ Backend quality commands:
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
+Draft cleanup is an explicit management command. It defaults to a privacy-safe dry-run:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py cleanup_application_drafts
+.\.venv\Scripts\python.exe manage.py cleanup_application_drafts --apply --batch-size 100 --orphan-grace-hours 24
+```
+
+Only run `--apply` against disposable synthetic data or an approved environment with a reviewed
+retention procedure. Scheduling, production object storage, monitoring, backups, deployment, and
+PostgreSQL runtime validation remain separate work.
+
 ## Replacing Or Redesigning The Frontend
 
 The frontend is replaceable. Visual redesigns, component changes, and source-controlled
@@ -201,8 +212,10 @@ or API-semantic changes require coordinated backend work.
 - Client validation improves feedback but is not a security boundary.
 - Server-side authorization, retention, CSRF, ETags, PDF validation, and private storage are
   implemented for Phase 3 draft and CV APIs.
-- Cleanup command execution, production rate limiting, duplicate final submission workflows,
-  PostgreSQL runtime validation, and deployment remain future work.
+- The cleanup command supports dry-run/apply modes for expired drafts, pending private-document
+  deletion, stale draft-storage orphans, and verified draft-shell hard deletion. Scheduling,
+  production rate limiting, duplicate final submission workflows, PostgreSQL runtime validation, and
+  deployment remain future work.
 - No usability study or accessibility conformance audit has been completed.
 - No CI, deployment, production database, or validated operational staff workflow exists; Django
   Admin registration is a foundation only.

@@ -33,7 +33,8 @@ Use anonymous server-side drafts with:
   request.
 - Immediate authorized-path revocation, scrubbing, logical document deletion, storage deletion
   attempts where supported, and durable pending-deletion state.
-- Planned Slice 8 batch cleanup for inaccessible expired drafts, retryable blobs, and stale orphans.
+- Batch cleanup for inaccessible expired drafts, retryable blobs, and stale orphans through
+  `python manage.py cleanup_application_drafts`.
 - Explicit structured candidate fields as defined in [domain model](domain-model.md).
 
 ## Concurrency
@@ -103,23 +104,31 @@ separate ports. Local HTTP is the only environment where the ownership cookie ma
 `Secure=False`; all other attributes remain unchanged. CORS and JavaScript-readable ownership
 tokens are not fallbacks.
 
-## Deferred Cleanup
+## Cleanup Command
 
-Expired draft cleanup remains planned Slice 8 work. It should:
+Expired draft cleanup is implemented as an idempotent, batch-bounded Django management command:
 
-- Revoke the credential and scrub candidate fields before storage work can be retried.
-- Delete experience entries and logically remove the active document.
-- Retry physical private-storage deletion using durable metadata.
-- Hard-delete the scrubbed draft shell after physical deletion succeeds.
-- Remove confirmed unreferenced provider keys only after a 24-hour grace period.
-- Record privacy-safe cleanup counts.
-- Avoid logging candidate fields.
+```powershell
+.\.venv\Scripts\python.exe manage.py cleanup_application_drafts
+.\.venv\Scripts\python.exe manage.py cleanup_application_drafts --apply --batch-size 100 --orphan-grace-hours 24
+```
 
-Cleanup is planned as an idempotent, batch-bounded Django management command with dry-run output.
-The command, scheduling, and queue infrastructure remain deferred.
+The command defaults to dry-run. Mutations require `--apply`. It:
+
+- Revokes the credential and scrubs candidate fields before storage work can be retried.
+- Deletes experience entries and logically removes the active document.
+- Retries physical private-storage deletion using durable metadata.
+- Hard-deletes the scrubbed draft shell after physical deletion succeeds.
+- Removes confirmed unreferenced provider keys only after a 24-hour grace period.
+- Records privacy-safe cleanup counts.
+- Avoids logging candidate fields.
+
+Scheduling, queue infrastructure, production object storage, provider-specific eventual-consistency
+evidence, monitoring, and legal retention approval remain deferred. The command output is aggregate
+operator output, not structured application logging.
 
 ## Implementation Cost
 
-Server-side drafts add models, cookie handling, authorization checks, current lifecycle tests, and a
-future cleanup-command test obligation. The trade-off is acceptable because ApplyFlow's core product
-promise depends on preserving work after recoverable errors.
+Server-side drafts add models, cookie handling, authorization checks, lifecycle tests, cleanup tests,
+and operational runbook work. The trade-off is acceptable because ApplyFlow's core product promise
+depends on preserving work after recoverable errors while retaining a bounded cleanup path.

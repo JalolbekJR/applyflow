@@ -156,8 +156,8 @@ the origin model, it requires a reviewed architecture decision rather than an ad
   retain the maximum body in worker memory.
 - Effective draft expiry: the earliest of inactivity TTL, absolute TTL, and the vacancy deadline.
 - Orphan grace period: 24 hours before a provider key with no live metadata is eligible for removal.
-- Cleanup operates in bounded batches and logs aggregate counts without candidate data, filenames,
-  hashes, or storage keys.
+- Cleanup operates in bounded batches and outputs aggregate counts without candidate data,
+  filenames, hashes, or storage keys. Structured cleanup logging and monitoring remain deferred.
 
 ## Backup And Restore
 

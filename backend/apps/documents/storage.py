@@ -4,6 +4,8 @@ import io
 import os
 import secrets
 import stat
+from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import BinaryIO, Protocol
@@ -48,7 +50,13 @@ class DocumentStorage(Protocol):
 
     def exists(self, key: str) -> bool: ...
 
-    def iter_keys(self, prefix: str | None = None) -> list[str]: ...
+    def iter_keys(
+        self,
+        prefix: str | None = None,
+        *,
+        older_than: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[str]: ...
 
 
 def safe_storage_key(key: object) -> str:
@@ -127,7 +135,13 @@ class LocalPrivateDocumentStorage:
             raise DocumentStorageOperationError("Document storage target is unsafe.")
         return True
 
-    def iter_keys(self, prefix: str | None = None) -> list[str]:
+    def iter_keys(
+        self,
+        prefix: str | None = None,
+        *,
+        older_than: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[str]:
         validated_prefix = safe_storage_prefix(prefix)
         root = self._existing_safe_root()
         if root is None:
@@ -153,7 +167,14 @@ class LocalPrivateDocumentStorage:
                 except InvalidDocumentStorageKey:
                     continue
                 if validated_prefix is None or canonical_key.startswith(validated_prefix):
+                    if older_than is not None and not self._file_is_older_than(
+                        document_path,
+                        older_than,
+                    ):
+                        continue
                     keys.append(canonical_key)
+                    if limit is not None and len(keys) >= limit:
+                        return keys
         return keys
 
     def _path_for_key(self, key: str, *, create_parent: bool) -> Path:
@@ -332,6 +353,18 @@ class LocalPrivateDocumentStorage:
     def _is_internal_temporary_name(self, name: str) -> bool:
         return name.startswith(".") or name.endswith(".tmp")
 
+    def _file_is_older_than(self, path: Path, cutoff: datetime) -> bool:
+        try:
+            return path.stat().st_mtime <= cutoff.timestamp()
+        except OSError as exc:
+            raise DocumentStorageOperationError("Document storage operation failed.") from exc
+
+
+@dataclass
+class _FakeStoredObject:
+    payload: bytes
+    stored_at: datetime
+
 
 class FakeDocumentStorage:
     def __init__(
@@ -341,7 +374,7 @@ class FakeDocumentStorage:
         fail_on_open: bool = False,
         fail_on_delete: bool = False,
     ) -> None:
-        self._objects: dict[str, bytes] = {}
+        self._objects: dict[str, _FakeStoredObject] = {}
         self.fail_on_save = fail_on_save
         self.fail_on_open = fail_on_open
         self.fail_on_delete = fail_on_delete
@@ -360,14 +393,17 @@ class FakeDocumentStorage:
             if not isinstance(chunk, bytes):
                 raise DocumentStorageOperationError("Document storage source is invalid.")
             chunks.append(chunk)
-        self._objects[validated_key] = b"".join(chunks)
+        self._objects[validated_key] = _FakeStoredObject(
+            payload=b"".join(chunks),
+            stored_at=datetime.now().astimezone(),
+        )
 
     def open(self, key: str) -> BinaryIO:
         validated_key = safe_storage_key(key)
         if self.fail_on_open:
             raise DocumentStorageOperationError("Document storage operation failed.")
         try:
-            return io.BytesIO(self._objects[validated_key])
+            return io.BytesIO(self._objects[validated_key].payload)
         except KeyError as exc:
             raise DocumentStorageNotFound("Document was not found.") from exc
 
@@ -380,12 +416,28 @@ class FakeDocumentStorage:
     def exists(self, key: str) -> bool:
         return safe_storage_key(key) in self._objects
 
-    def iter_keys(self, prefix: str | None = None) -> list[str]:
+    def iter_keys(
+        self,
+        prefix: str | None = None,
+        *,
+        older_than: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[str]:
         validated_prefix = safe_storage_prefix(prefix)
         keys = sorted(self._objects)
         if validated_prefix is None:
-            return keys
-        return [key for key in keys if key.startswith(validated_prefix)]
+            filtered = keys
+        else:
+            filtered = [key for key in keys if key.startswith(validated_prefix)]
+        if older_than is not None:
+            filtered = [key for key in filtered if self._objects[key].stored_at <= older_than]
+        if limit is not None:
+            return filtered[:limit]
+        return filtered
+
+    def set_stored_at(self, key: str, stored_at: datetime) -> None:
+        validated_key = safe_storage_key(key)
+        self._objects[validated_key].stored_at = stored_at
 
 
 @lru_cache(maxsize=1)
