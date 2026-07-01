@@ -8,8 +8,9 @@ environment-driven PostgreSQL-ready settings. Local migrations and tests use SQL
 runtime behavior has not been verified.
 
 This remains an outline because final submission, private status lookup APIs, cleanup automation,
-deployment, monitoring, backup, and operational procedures are not implemented. Exact operational
-procedures belong to the Phase 6 packaging and deployment work.
+deployment, monitoring, backup, and operational procedures are not implemented. A manual cleanup
+command exists for local/approved maintenance runs, but exact operational procedures belong to the
+Phase 6 packaging and deployment work.
 
 ## Purpose
 

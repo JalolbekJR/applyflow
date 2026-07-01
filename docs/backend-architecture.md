@@ -58,29 +58,29 @@ flowchart LR
     Drafts --> Database["SQLite local and tests; PostgreSQL target"]
     Documents --> Database
     Documents --> PrivateStorage["Private local storage adapter"]
-    PlannedCleanup["Planned Slice 8 cleanup command"] -. future .-> Database
-    PlannedCleanup -. future .-> PrivateStorage
+    CleanupCommand["Cleanup management command"] --> Database
+    CleanupCommand --> PrivateStorage
     Staff["Authenticated staff"] --> Admin["Django Admin metadata only"]
     Admin --> Database
 ```
 
 ### Responsibilities
 
-| Component               | Phase 3 responsibility                                                                                                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Models                  | Persistence, lifecycle timestamps, version, bounded child records, indexes, and constraints.                                                                                                                          |
-| Serializers             | Partial-draft validation, API field naming, safe response projection, and multipart metadata validation.                                                                                                              |
-| Draft ownership service | Parse the compound cookie, load only its UUID target, verify the secret hash, and reject non-active or expired drafts.                                                                                                |
-| Draft services          | Create, mutate, abandon, scrub, refresh effective expiry, increment version, and enforce vacancy ownership.                                                                                                           |
-| Experience services     | Create, update, validate unique `position`, cap, and delete entries only under an authorized draft. A dedicated reorder operation is not implemented.                                                                 |
-| Document validator      | Enforce extension, MIME, byte limit, signature, structural PDF checks, active-content rejection, filename normalization, and checksum calculation.                                                                    |
-| Storage interface       | Save, open for internal validation/future streaming, delete, test existence, and enumerate stale private objects without leaking provider details into models.                                                        |
-| Document services       | Coordinate validation, storage, metadata, replacement, logical deletion, compensation, request-path physical deletion attempts, and pending-deletion metadata.                                                        |
-| Error helpers           | Generate request IDs for API error payloads, return `X-Request-ID` on current error responses, and keep error bodies free of internal details.                                                                        |
-| Request logging         | Deferred: shared request middleware, structured log correlation, and one request ID spanning responses and logs.                                                                                                      |
-| Cleanup command         | Planned Slice 8: expire and scrub inaccessible drafts, enumerate stale orphans, retry pending deletion, support dry-run/apply modes, and report aggregate counts.                                                     |
-| Nuxt typed service      | Acquire CSRF, call same-origin APIs, normalize errors, and report upload progress.                                                                                                                                    |
-| Nuxt composable         | Hold the authoritative aggregate in memory and coordinate bootstrap, explicit save/continue mutations, serialized unsafe mutations, conflict recovery, route transitions, and local form preservation after failures. |
+| Component               | Phase 3 responsibility                                                                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Models                  | Persistence, lifecycle timestamps, version, bounded child records, indexes, and constraints.                                                                                                                                       |
+| Serializers             | Partial-draft validation, API field naming, safe response projection, and multipart metadata validation.                                                                                                                           |
+| Draft ownership service | Parse the compound cookie, load only its UUID target, verify the secret hash, and reject non-active or expired drafts.                                                                                                             |
+| Draft services          | Create, mutate, abandon, scrub, refresh effective expiry, increment version, and enforce vacancy ownership.                                                                                                                        |
+| Experience services     | Create, update, validate unique `position`, cap, and delete entries only under an authorized draft. A dedicated reorder operation is not implemented.                                                                              |
+| Document validator      | Enforce extension, MIME, byte limit, signature, structural PDF checks, active-content rejection, filename normalization, and checksum calculation.                                                                                 |
+| Storage interface       | Save, open for internal validation/future streaming, delete, test existence, and enumerate stale private objects without leaking provider details into models.                                                                     |
+| Document services       | Coordinate validation, storage, metadata, replacement, logical deletion, compensation, request-path physical deletion attempts, and pending-deletion metadata.                                                                     |
+| Error helpers           | Generate request IDs for API error payloads, return `X-Request-ID` on current error responses, and keep error bodies free of internal details.                                                                                     |
+| Request logging         | Deferred: shared request middleware, structured log correlation, and one request ID spanning responses and logs.                                                                                                                   |
+| Cleanup command         | Expire and scrub inaccessible drafts, retry pending physical deletion, reconcile stale draft-storage orphans after a grace period, hard-delete verified scrubbed shells, support dry-run/apply modes, and report aggregate counts. |
+| Nuxt typed service      | Acquire CSRF, call same-origin APIs, normalize errors, and report upload progress.                                                                                                                                                 |
+| Nuxt composable         | Hold the authoritative aggregate in memory and coordinate bootstrap, explicit save/continue mutations, serialized unsafe mutations, conflict recovery, route transitions, and local form preservation after failures.              |
 
 ## Anonymous Ownership Decision
 
@@ -173,11 +173,11 @@ extends beyond `created_at + 30 days` or the vacancy deadline.
 stateDiagram-v2
     [*] --> Active: create
     Active --> Active: authorized mutation / version + 1 / expiry = min(activity + 7d, created + 30d, vacancy deadline)
-    Active --> AbandonedPendingCleanup: candidate confirms abandon / revoke / scrub / logical delete where reached
-    Active --> ExpiredPendingCleanup: request-time expiry / revoke / scrub / logical delete where reached
+    Active --> AbandonedPendingCleanup: candidate confirms abandon / revoke / logical delete where reached
+    Active --> ExpiredPendingCleanup: cleanup command confirms expiry / revoke / scrub / logical delete
     Active --> Submitted: Phase 4 atomic submission only
-    AbandonedPendingCleanup --> [*]: planned Slice 8 physical cleanup and hard delete
-    ExpiredPendingCleanup --> [*]: planned Slice 8 physical cleanup and hard delete
+    AbandonedPendingCleanup --> [*]: cleanup command confirms physical cleanup and hard delete
+    ExpiredPendingCleanup --> [*]: cleanup command confirms physical cleanup and hard delete
     Submitted --> [*]: Phase 4 retention policy
 ```
 
@@ -199,17 +199,18 @@ Rules:
   vacancy. Abandon requires a separate confirmation and authorized `DELETE`.
 - Abandonment uses `DELETE /api/v1/application-drafts/{draft_id}/`, requires `If-Match`, returns
   `204`, revokes the secret, and clears the cookie.
-- Abandonment and request-time expiry set `credential_revoked_at`, scrub structured candidate
-  fields, delete experience entries, logically delete the document where the current request path
-  reaches it, and clear the cookie. The draft shell can retain the durable storage key and deletion
-  state needed for retryable physical cleanup.
-- Slice 8 cleanup will own batch retry and hard deletion of scrubbed draft shells after physical
-  cleanup succeeds.
-- A direct request after expiry follows the same revoke-and-scrub path before returning the generic
-  unavailable response.
-- Slice 8 cleanup remains a planned idempotent Django management command. It must support dry-run
-  reporting, bounded batches, retries pending physical deletions, and privacy-safe aggregate counts.
-  Scheduling remains deferred.
+- Abandonment sets `credential_revoked_at`, deletes experience entries, logically deletes the
+  document where the current request path reaches it, clears the cookie, and leaves any remaining
+  candidate-field scrub, retryable physical deletion, and final shell removal to the cleanup
+  command.
+- Expired direct requests return the generic unavailable response without renewing activity. The
+  cleanup command later confirms expiry, revokes credentials, scrubs candidate fields, deletes
+  experience entries, and logically deletes active draft documents.
+- The cleanup command is an idempotent, bounded Django management command available as
+  `python manage.py cleanup_application_drafts`. It defaults to dry-run, requires `--apply` for
+  mutations, retries pending physical deletions, applies a stale-orphan grace period, hard-deletes
+  only verified terminal draft shells, and emits privacy-safe aggregate counts. Scheduling remains
+  deferred.
 - Phase 4 owns atomic submission. It will copy candidate and experience data, transfer the active
   document, mark the draft submitted, revoke the cookie, and make the submitted record immutable.
 
@@ -222,7 +223,7 @@ save(key, chunks, content_type) -> stored_key
 open(key) -> binary stream
 delete(key) -> None
 exists(key) -> bool
-iter_keys(prefix, older_than) -> iterator
+iter_keys(prefix, older_than=None, limit=None) -> list[str]
 ```
 
 The Phase 3 adapter writes beneath an ignored private root outside static files and public media
@@ -295,9 +296,9 @@ and deleting temporary objects after every rejected or failed operation.
 - Deletion: mark `deleted_at` before returning success so authorization stops immediately. Physical
   deletion sets `storage_deleted_at`; failures remain retryable and never restore candidate access.
 - Orphan handling: current services record deletion state and attempt request-path physical
-  deletion where supported. Slice 8 must still add the cleanup command that retries records with
-  `deleted_at` and no `storage_deleted_at`, applies the stale-orphan grace period, compares provider
-  keys with live metadata, and removes confirmed unreferenced objects in bounded batches.
+  deletion where supported. The cleanup command retries records with `deleted_at` and no
+  `storage_deleted_at`, applies the stale-orphan grace period, compares provider keys with live
+  metadata, and removes confirmed unreferenced draft objects in bounded batches.
 - Concurrent upload, replace, and delete operations lock the draft/current-document rows and rely
   on the active-document uniqueness constraint. Losers receive `409 draft_conflict`.
 
@@ -352,10 +353,11 @@ parser/storage rejection paths that do not require sensitive log content.
 ### Deferred Operational Logging
 
 Future operational logging should add privacy-safe structured events for draft, experience,
-document, authorization, CSRF, and cleanup lifecycles only after a dedicated logging task. Deferred
-work includes shared request-ID correlation, structured lifecycle events not currently emitted,
-cleanup-command events, orphan-cleanup reporting, retention configuration, edge IP/security logging,
-monitoring integration, and legal/operational review of retention periods.
+document, authorization, CSRF, and cleanup lifecycles only after a dedicated logging task. The
+cleanup command emits aggregate terminal output, not structured application logs. Deferred work
+includes shared request-ID correlation, structured lifecycle events not currently emitted, retention
+configuration, edge IP/security logging, monitoring integration, and legal/operational review of
+retention periods.
 
 Allowed future fields should remain limited to request ID, event name, result category, HTTP status,
 actor type, vacancy UUID, server-known opaque draft/document UUID only when incident correlation
@@ -371,8 +373,9 @@ application logs.
   later against free local PostgreSQL or Docker, or a GitHub Actions service container. Do not
   claim PostgreSQL concurrency safety until those tests pass. Their absence blocks production
   claims, not initial implementation.
-- The cleanup command remains deferred to Slice 8. It must be retryable and batch-bounded when
-  implemented. A durable queue is reconsidered only if observed volume or latency requires it.
+- The cleanup command is implemented as a retryable, batch-bounded manual management command. A
+  scheduler, durable queue, or worker is reconsidered only if approved operational volume or latency
+  requires it.
 - Private object storage, shared throttling/cache, deployment, monitoring platforms, backups, and
   scheduling remain deferred. Their absence means Phase 3 is not production-ready for real
   candidate data.

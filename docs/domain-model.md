@@ -160,13 +160,15 @@ Keep the existing exact-one-owner and one-active-document-per-owner constraints.
 - Only `active` drafts with null `credential_revoked_at`, an unexpired `expires_at`, matching cookie
   UUID, and a verified secret may be read or changed.
 - A route vacancy never overrides the draft's stored vacancy. Cross-vacancy reuse is rejected.
-- Abandonment and request-time expiry set status and revocation, blank candidate text and structured
-  lists, reset consent fields, remove experience children, logically delete documents where the
-  current request path reaches them, and attempt storage deletion on supported document paths.
+- Abandonment sets status and revocation, removes experience children, logically deletes documents
+  where the current request path reaches them, and attempts storage deletion on supported document
+  paths. The cleanup command completes candidate-field scrubbing for abandoned shells and performs
+  inaccessible expired-draft transition, revocation, scrubbing, experience deletion, and logical
+  document deletion.
 - The document metadata shell may retain only the private storage key and deletion state until the
   blob is physically removed. Original display names are blanked during scrubbing.
-- Planned Slice 8 cleanup retries physical deletion, reconciles stale orphans, applies the approved
-  grace period, and hard-deletes scrubbed draft shells and document metadata only after successful
+- Slice 8 cleanup retries physical deletion, reconciles stale orphans, applies the approved grace
+  period, and hard-deletes scrubbed draft shells and document metadata only after successful
   physical cleanup.
 - Submitted-state immutability and experience transfer are not implemented until Phase 4.
 

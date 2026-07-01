@@ -1,7 +1,7 @@
 # Testing Strategy
 
 Testing covers the implemented Phase 1 frontend, Phase 2 backend foundation, completed Phase 3
-backend slices, and current Slice 7 frontend integration.
+backend slices through Slice 8 cleanup, and current frontend integration.
 
 ## Current Frontend Checks
 
@@ -86,23 +86,26 @@ Current pytest coverage includes:
   chunked local writes, temporary-file cleanup, deterministic fake/local adapter enumeration,
   strict document-storage configuration, no public storage route or URL capability, secure PDF
   validation, and authorized singleton CV metadata/upload/replacement/delete behavior.
+- Cleanup command dry-run/apply behavior, expired-draft transition, terminal scrubbing, pending
+  document deletion retry, missing-object completion, stale-orphan grace handling, batch limits,
+  hard-delete eligibility, item-failure exit behavior, and privacy-safe aggregate output.
 
 ## Phase 3 Verification Matrix
 
 ### Models, Constraints, And Services
 
-| Area                        | Status                                                                    | Required tests                                                                                                                                                                                                        | Primary engine                                 |
-| --------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Credential hashing          | Implemented and currently tested                                          | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize.                                                                                                    | SQLite                                         |
-| Draft expiry                | Implemented and currently tested                                          | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention.                                                                | SQLite                                         |
-| Ownership                   | Implemented and currently tested                                          | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required.                                                                                      | SQLite                                         |
-| State transitions           | Implemented and currently tested                                          | Only active drafts mutate; abandon/request-time expire revoke and scrub; submitted transition remains unavailable in Phase 3.                                                                                         | SQLite                                         |
-| Optimistic version          | Implemented; PostgreSQL-specific verification pending                     | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry.     | SQLite; concurrent lock behavior on PostgreSQL |
-| Experience entries          | Implemented; PostgreSQL-specific cap/order verification pending           | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, persisted order, cascade/scrub, and parent-version increment.                                                           | SQLite; concurrent cap/order on PostgreSQL     |
-| Active document uniqueness  | Implemented; PostgreSQL-specific replacement verification pending         | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically.                                                                                                             | SQLite; concurrent replacement on PostgreSQL   |
-| Cleanup-supporting metadata | Implemented and currently tested                                          | Logical deletion, deletion timestamps, pending physical-deletion metadata, request-path delete attempts, replacement compensation, and adapter enumeration.                                                           | SQLite plus temporary fake/local storage       |
-| Cleanup command coverage    | Planned Slice 8 coverage                                                  | Cleanup eligibility beyond request paths, stale-orphan grace-period behavior, batch selection, dry-run, repeated execution, retry across command runs, aggregate output, exit behavior, and parallel cleanup locking. | SQLite plus temporary fake/local storage       |
-| Scrubbing                   | Implemented for current request paths; full batch cleanup planned Slice 8 | Candidate fields, skills, message, consent, experience text, and original display filename are removed during abandonment/request-time expiry paths; batch cleanup of inaccessible drafts remains planned.            | SQLite                                         |
+| Area                        | Status                                                            | Required tests                                                                                                                                                                                                                  | Primary engine                                 |
+| --------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Credential hashing          | Implemented and currently tested                                  | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize.                                                                                                              | SQLite                                         |
+| Draft expiry                | Implemented and currently tested                                  | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention.                                                                          | SQLite                                         |
+| Ownership                   | Implemented and currently tested                                  | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required.                                                                                                | SQLite                                         |
+| State transitions           | Implemented and currently tested                                  | Only active drafts mutate; abandon/request-time expire revoke and scrub; submitted transition remains unavailable in Phase 3.                                                                                                   | SQLite                                         |
+| Optimistic version          | Implemented; PostgreSQL-specific verification pending             | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry.               | SQLite; concurrent lock behavior on PostgreSQL |
+| Experience entries          | Implemented; PostgreSQL-specific cap/order verification pending   | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, persisted order, cascade/scrub, and parent-version increment.                                                                     | SQLite; concurrent cap/order on PostgreSQL     |
+| Active document uniqueness  | Implemented; PostgreSQL-specific replacement verification pending | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically.                                                                                                                       | SQLite; concurrent replacement on PostgreSQL   |
+| Cleanup-supporting metadata | Implemented and currently tested                                  | Logical deletion, deletion timestamps, pending physical-deletion metadata, request-path delete attempts, replacement compensation, and adapter enumeration.                                                                     | SQLite plus temporary fake/local storage       |
+| Cleanup command coverage    | Implemented and currently tested                                  | Cleanup eligibility beyond request paths, stale-orphan grace-period behavior, batch selection, dry-run, repeated execution, retry across command runs, aggregate output, item-failure exit behavior, and conservative rechecks. | SQLite plus temporary fake/local storage       |
+| Scrubbing                   | Implemented and currently tested                                  | Candidate fields, skills, message, consent, experience text, and original display filename are removed by cleanup for expired/abandoned shells; current request paths revoke or logically retire data where reached.            | SQLite                                         |
 
 ### API Authorization And CSRF
 
@@ -147,7 +150,7 @@ Current pytest coverage includes:
 | Replacement failure         | Old active metadata and blob remain authorized; no second active document.                                                                                                                                                                    |
 | Deletion                    | Authorization stops at logical deletion; physical failure is retryable; repeat does not restore access.                                                                                                                                       |
 | Unauthorized mutation       | Another draft cannot read metadata, create/replace, or delete the singleton CV.                                                                                                                                                               |
-| Orphan cleanup              | Deferred Slice 8 coverage: unreferenced keys younger than the approved grace period are retained; older confirmed orphans are removed in bounded idempotent runs.                                                                             |
+| Orphan cleanup              | Implemented Slice 8 coverage: unreferenced keys younger than the approved grace period are retained; older confirmed orphans are removed in bounded idempotent runs; referenced and uncertain objects are retained.                           |
 | Public exposure             | No API response, admin field, static route, or Nuxt route exposes a storage key or public URL.                                                                                                                                                |
 
 Malware scanning is not tested or claimed because Phase 3 does not implement it.
@@ -200,7 +203,8 @@ The following evidence must be repeated on PostgreSQL before production-readines
 - conditional one-active-document uniqueness under concurrent replacement;
 - generated check constraints and migration SQL;
 - transaction/on-commit compensation behavior with the production database driver;
-- cleanup batch locking if parallel cleanup is ever allowed.
+- cleanup batch locking if parallel cleanup is ever allowed. The current command has no parallel
+  mode.
 
 Phase 3 can be implemented with SQLite locally, but a skipped PostgreSQL check must remain an
 explicit release risk. Creating or connecting a PostgreSQL service requires separate approval.

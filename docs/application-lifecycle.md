@@ -4,32 +4,34 @@ Application drafts have their own expiration and submission behavior. They are n
 
 ## Version-One States
 
-| Internal State | Candidate-Facing Label | Meaning |
-| --- | --- | --- |
-| `submitted` | Received | The atomic submission completed. |
-| `under_review` | Under review | Authorized staff started review. |
-| `closed` | Closed | The application is no longer active in the review workflow. |
+| Internal State | Candidate-Facing Label | Meaning                                                     |
+| -------------- | ---------------------- | ----------------------------------------------------------- |
+| `submitted`    | Received               | The atomic submission completed.                            |
+| `under_review` | Under review           | Authorized staff started review.                            |
+| `closed`       | Closed                 | The application is no longer active in the review workflow. |
 
 Candidate-facing responses remain minimal and never expose internal notes, ranking, staff identity, or rejection reasoning.
 
 ## Transitions
 
-| From | To | Actor | Notes |
-| --- | --- | --- | --- |
-| none | `submitted` | Candidate/API | Created only by successful atomic draft submission. |
-| `submitted` | `under_review` | Authorized admin | Staff review starts. |
-| `submitted` | `closed` | Authorized admin | Review closes without exposing an internal reason. |
-| `under_review` | `closed` | Authorized admin | Review closes without exposing an internal reason. |
+| From           | To             | Actor            | Notes                                               |
+| -------------- | -------------- | ---------------- | --------------------------------------------------- |
+| none           | `submitted`    | Candidate/API    | Created only by successful atomic draft submission. |
+| `submitted`    | `under_review` | Authorized admin | Staff review starts.                                |
+| `submitted`    | `closed`       | Authorized admin | Review closes without exposing an internal reason.  |
+| `under_review` | `closed`       | Authorized admin | Review closes without exposing an internal reason.  |
 
-Invalid transitions fail server-side. Every allowed status change records a privacy-safe audit event.
+Invalid transitions fail server-side. Privacy-safe audit events remain future operational work.
 
 ## Draft Outcomes
 
 - Create: produce one server-side draft and protected credential when no active draft exists.
 - Restore: return the existing draft for the same vacancy.
 - Continue: restore the existing draft; never create another draft.
-- Abandon: delete the draft and attached document, then clear the credential.
-- Expire: delete the draft and attached document through cleanup.
+- Abandon: revoke the draft credential, make attached draft documents unavailable, then clear the
+  credential cookie.
+- Expire: reject future access immediately and let cleanup revoke, scrub, retry private storage
+  deletion, and hard-delete the shell only after physical cleanup is confirmed.
 - Submit: atomically create the application, transfer the document, mark the draft submitted, and invalidate its credential so it cannot be submitted again.
 
 ## Immutable After Submission
@@ -60,7 +62,8 @@ The API returns a generic conflict with useful status-lookup guidance without ex
 
 - Draft document: deleted when the candidate removes it, abandons the draft, or the draft expires.
 - Submitted document: retained and deleted according to the reviewed operational policy.
-- Document download: available only after explicit authorized staff access checks.
+- Document download: deferred until explicit authorized staff access checks and a reviewed
+  streaming response exist.
 
 ## Deferred States And Workflows
 
