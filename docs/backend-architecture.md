@@ -369,10 +369,10 @@ application logs.
 
 - A modular monolith and local private storage keep Phase 3 free of paid infrastructure.
 - SQLite remains suitable for local development and most unit tests. PostgreSQL-specific row-lock,
-  concurrency, conditional-constraint, and replacement tests must be written separately and can run
-  later against free local PostgreSQL or Docker, or a GitHub Actions service container. Do not
-  claim PostgreSQL concurrency safety until those tests pass. Their absence blocks production
-  claims, not initial implementation.
+  concurrency, conditional-constraint, replacement, cleanup-race, and rollback tests are isolated
+  behind a `postgres` marker and explicit test settings. PostgreSQL concurrency evidence must be
+  rerun against an actual PostgreSQL service after relevant changes. Missing or blocked PostgreSQL
+  execution blocks release and production claims, not ordinary local development.
 - The cleanup command is implemented as a retryable, batch-bounded manual management command. A
   scheduler, durable queue, or worker is reconsidered only if approved operational volume or latency
   requires it.

@@ -8,7 +8,8 @@ four-step application flow. Django 5.2 and DRF provide health, vacancy, anonymou
 experience-entry, and private singleton CV metadata/upload/delete APIs. The current frontend uses
 the real vacancy, draft, experience, employment-entry, CV, conflict, and abandonment APIs through a
 same-origin `/api/v1/` boundary. Final submission, private status lookup, deployment, cleanup
-scheduling, monitoring, backups, and PostgreSQL runtime validation remain unimplemented.
+scheduling, monitoring, backups, and production operations remain incomplete. Phase 3 now includes
+an isolated PostgreSQL verification boundary for runtime concurrency and constraint evidence.
 
 ## Current Frontend
 
@@ -51,11 +52,14 @@ written to localStorage or sessionStorage. The draft ownership credential is Htt
 browser-managed.
 
 The backend lives under `backend/` and uses Django, Django REST Framework, and PostgreSQL-ready
-settings. SQLite is the local bootstrap and test database. PostgreSQL runtime behavior has not been
-validated in this phase. The API keeps a same-origin modular monolith with one active browser-owned
-draft at a time, a host-only HttpOnly ownership cookie, seven-day inactivity expiry bounded by a
-thirty-day absolute lifetime and the vacancy deadline, `ETag`/`If-Match` optimistic concurrency, and
-singleton private CV metadata/upload/delete endpoints with no candidate download route.
+settings. SQLite is the local bootstrap and fast test database. A test-only PostgreSQL verification
+boundary covers row-lock, concurrency, constraint, cleanup, and rollback evidence and must be rerun
+against an actual PostgreSQL service before release or production-readiness claims. The API keeps a
+same-origin modular monolith with one active
+browser-owned draft at a time, a host-only HttpOnly ownership cookie, seven-day inactivity expiry
+bounded by a thirty-day absolute lifetime and the vacancy deadline, `ETag`/`If-Match` optimistic
+concurrency, and singleton private CV metadata/upload/delete endpoints with no candidate download
+route.
 
 Relevant decisions are recorded in [the ADR index](docs/decisions/index.md).
 
@@ -153,7 +157,8 @@ unless a failure output directory is intentionally inspected during debugging.
 Requirements:
 
 - Python 3.11, 3.12, or 3.13.
-- PostgreSQL for later integration; SQLite is sufficient for the current local bootstrap and tests.
+- PostgreSQL for opt-in verification and later production integration; SQLite is sufficient for the
+  default local bootstrap and fast tests.
 
 From the repository root on Windows PowerShell:
 
@@ -180,6 +185,11 @@ Backend quality commands:
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
+PostgreSQL verification is separate from the ordinary SQLite suite. See
+[PostgreSQL verification](docs/postgresql-verification.md) for the test-only Compose service,
+required environment variables, focused PostgreSQL commands, and teardown. PostgreSQL-only tests are
+marked and skip explicitly when SQLite is selected.
+
 Draft cleanup is an explicit management command. It defaults to a privacy-safe dry-run:
 
 ```powershell
@@ -188,8 +198,8 @@ Draft cleanup is an explicit management command. It defaults to a privacy-safe d
 ```
 
 Only run `--apply` against disposable synthetic data or an approved environment with a reviewed
-retention procedure. Scheduling, production object storage, monitoring, backups, deployment, and
-PostgreSQL runtime validation remain separate work.
+retention procedure. Scheduling, production object storage, production PostgreSQL topology,
+monitoring, backups, and deployment remain separate work.
 
 ## Replacing Or Redesigning The Frontend
 
@@ -214,8 +224,8 @@ or API-semantic changes require coordinated backend work.
   implemented for Phase 3 draft and CV APIs.
 - The cleanup command supports dry-run/apply modes for expired drafts, pending private-document
   deletion, stale draft-storage orphans, and verified draft-shell hard deletion. Scheduling,
-  production rate limiting, duplicate final submission workflows, PostgreSQL runtime validation, and
-  deployment remain future work.
+  production rate limiting, duplicate final submission workflows, deployment, and production
+  operations remain future work.
 - No usability study or accessibility conformance audit has been completed.
 - No CI, deployment, production database, or validated operational staff workflow exists; Django
   Admin registration is a foundation only.
@@ -229,6 +239,7 @@ Do not use the current frontend to collect real candidate information.
 - [Frontend integration contract](docs/frontend-integration/README.md)
 - [Accessibility plan](docs/accessibility.md)
 - [Testing strategy](docs/testing-strategy.md)
+- [PostgreSQL verification](docs/postgresql-verification.md)
 - [Upload security](docs/upload-security.md)
 - [Threat model](docs/threat-model.md)
 - [Implementation roadmap](docs/implementation-roadmap.md)

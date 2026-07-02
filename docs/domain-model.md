@@ -184,7 +184,10 @@ Implemented migrations:
 
 Still deferred:
 
-1. PostgreSQL-only concurrency and SQL verification before any production-readiness claim.
+1. Fresh PostgreSQL verification after relevant schema, mutation, document, or cleanup changes
+   before any production-readiness claim.
+2. Production PostgreSQL topology, credentials, pooling, failover, backups, monitoring, deployment,
+   and load testing.
 
 ## Deferred Schema Decisions
 
