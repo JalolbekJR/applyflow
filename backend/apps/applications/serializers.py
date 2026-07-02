@@ -113,10 +113,18 @@ class CandidatePatchSerializer(DraftSectionSerializer):
 
     def validate_portfolio_url(self, value):
         if has_disallowed_control(value):
-            raise serializers.ValidationError("Enter a valid HTTP or HTTPS link.")
+            raise serializers.ValidationError("Enter a secure link starting with https://.")
         value = value.strip()
-        if value and urlsplit(value).scheme.lower() not in {"http", "https"}:
-            raise serializers.ValidationError("Enter a valid HTTP or HTTPS link.")
+        if value:
+            parts = urlsplit(value)
+            try:
+                _ = parts.port
+            except ValueError:
+                raise serializers.ValidationError(
+                    "Enter a secure link starting with https://."
+                ) from None
+            if parts.scheme.lower() != "https":
+                raise serializers.ValidationError("Enter a secure link starting with https://.")
         return value
 
     def validate(self, attrs):

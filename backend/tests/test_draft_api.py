@@ -748,7 +748,7 @@ def test_candidate_patch_updates_email_normalization_and_omits_private_field(vac
             "email": "  FICTIONAL.CANDIDATE@EXAMPLE.TEST  ",
             "phone": "+998 (90) 123-45-67",
             "preferred_contact_method": "phone",
-            "portfolio_url": "http://portfolio.example.test/profile",
+            "portfolio_url": "https://portfolio.example.test/profile",
         },
         token,
     )
@@ -795,6 +795,7 @@ def test_patch_requires_nonempty_json_object_with_known_fields(vacancy, section,
         ({"email": "not-an-email"}, "email"),
         ({"email": None}, "email"),
         ({"phone": "letters-only"}, "phone"),
+        ({"portfolio_url": "http://example.test/profile"}, "portfolio_url"),
         ({"portfolio_url": "ftp://example.test/profile"}, "portfolio_url"),
         ({"portfolio_url": "not a url"}, "portfolio_url"),
         ({"portfolio_url": "https://example.test/\nheader"}, "portfolio_url"),
@@ -819,6 +820,59 @@ def test_candidate_patch_rejects_invalid_fields_without_writing(vacancy, payload
         draft.phone,
         draft.version,
         draft.last_activity_at,
+    ) == original
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "portfolio_url",
+    [
+        "https://example.com:65536/path",
+        "https://example.com:99999/path",
+    ],
+)
+def test_candidate_patch_rejects_out_of_range_portfolio_url_port_without_writing(
+    vacancy, portfolio_url
+):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+    original = (
+        draft.full_name,
+        draft.email,
+        draft.phone,
+        draft.portfolio_url,
+        draft.preferred_contact_method,
+        draft.version,
+        draft.last_activity_at,
+        draft.expires_at,
+    )
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {
+            "full_name": "Port Boundary Candidate",
+            "email": "port.boundary@example.test",
+            "phone": "+44 20 7946 0958",
+            "portfolio_url": portfolio_url,
+            "preferred_contact_method": "email",
+        },
+        token,
+    )
+
+    assert_validation_error(response, "portfolio_url")
+    draft.refresh_from_db()
+    assert (
+        draft.full_name,
+        draft.email,
+        draft.phone,
+        draft.portfolio_url,
+        draft.preferred_contact_method,
+        draft.version,
+        draft.last_activity_at,
+        draft.expires_at,
     ) == original
 
 
@@ -853,7 +907,36 @@ def test_candidate_phone_preference_uses_merged_state_atomically(vacancy):
 
 
 @pytest.mark.django_db
-def test_candidate_patch_accepts_documented_boundaries(vacancy):
+@pytest.mark.parametrize(
+    "portfolio_url",
+    [
+        "https://example.com:443/path",
+        "https://example.com:65535/path",
+        "HTTPS://example.com/path",
+    ],
+)
+def test_candidate_patch_accepts_documented_portfolio_url_boundaries(vacancy, portfolio_url):
+    client, token = csrf_client()
+    create_draft(client, vacancy, token)
+    draft = apps.get_model("applications.ApplicationDraft").objects.get()
+
+    response = patch_draft(
+        client,
+        draft.pk,
+        "candidate",
+        {
+            "full_name": "名" * 200,
+            "phone": "+" + ("1" * 29),
+            "portfolio_url": portfolio_url,
+        },
+        token,
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_candidate_patch_accepts_documented_length_boundary(vacancy):
     client, token = csrf_client()
     create_draft(client, vacancy, token)
     draft = apps.get_model("applications.ApplicationDraft").objects.get()

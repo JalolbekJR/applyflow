@@ -167,8 +167,8 @@ Malware scanning is not tested or claimed because Phase 3 does not implement it.
 - Server field errors mapped to existing summary and input associations.
 - Generic expired/unavailable recovery that clears in-memory candidate data.
 - Stale-version conflict preserves local text and requires a deliberate refresh/review action.
-- Experience-entry add, edit, persisted position ordering, cap, validation, delete confirmation,
-  and server rollback.
+- Experience-entry add, edit, persisted position ordering, cap, validation, deletion, and server
+  rollback.
 - Upload progress, cancel, retry, successful singleton-CV metadata, replacement preserving old
   metadata until success, and confirmed deletion.
 - Loading, saving, saved, failed, retrying, uploaded, removed, conflict, and expired announcements.
