@@ -38,12 +38,12 @@ where applicable, and corresponding frontend contract and documentation updates.
 
 ## Current Technology
 
-| Layer           | Current implementation                                                       |
-| --------------- | ---------------------------------------------------------------------------- |
-| Frontend        | Nuxt 4.4.8, Vue 3.5.38, TypeScript, project CSS, Vitest, Playwright          |
-| Backend         | Django 5.2.15, Django REST Framework 3.17.1                                  |
-| Local storage   | SQLite for local/test database, private local document root                  |
-| Target database | PostgreSQL-ready settings; PostgreSQL runtime validation remains future work |
+| Layer           | Current implementation                                                                |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Frontend        | Nuxt 4.4.8, Vue 3.5.38, TypeScript, project CSS, Vitest, Playwright                   |
+| Backend         | Django 5.2.15, Django REST Framework 3.17.1                                           |
+| Local storage   | SQLite for local/test database, private local document root                           |
+| Target database | PostgreSQL-ready settings; test-only PostgreSQL verification boundary for backend use |
 
 ## Architecture
 
@@ -77,5 +77,6 @@ semantics, security rules, and data lifecycle are stable integration boundaries.
 
 Final application submission and private status lookup are not implemented. The frontend must not
 call guessed endpoints or present fictional submission credentials as real. Production deployment,
-scheduled cleanup, PostgreSQL concurrency validation, monitoring, backups, and CI remain separate
-future work.
+production PostgreSQL topology, scheduled cleanup, monitoring, backups, and CI remain separate
+future work. PostgreSQL runtime/concurrency verification is a backend test boundary that must be
+rerun after relevant backend contract changes.

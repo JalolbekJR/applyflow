@@ -164,4 +164,5 @@ audit event. That work requires a later review and is not implied by upload impl
 
 Cleanup tests cover stale-orphan grace-period behavior, repeated cleanup runs, storage-failure
 retry, and privacy-safe aggregate output. PostgreSQL-specific row-lock and concurrent replacement
-behavior remains a separate production-readiness track.
+behavior is covered by the separate PostgreSQL verification boundary and must be rerun after
+relevant backend changes. Production object-storage behavior remains a separate readiness track.

@@ -2,8 +2,9 @@
 
 The Nuxt frontend and Django backend foundation run locally. Django supports PostgreSQL through
 `DATABASE_URL`; SQLite is the default local bootstrap. Phase 3 includes a provider-neutral private
-document-storage boundary with a local development adapter. Production object storage, Docker, and
-deployment configuration are not implemented.
+document-storage boundary with a local development adapter and a test-only PostgreSQL verification
+Compose service. Production object storage, production Docker, and deployment configuration are not
+implemented.
 
 ## Local Development Services
 
@@ -26,9 +27,10 @@ Phase 3 local capability:
   enumeration. The implemented Phase 3 adapter is `local_private`, rooted at an ignored
   development directory by default; a deterministic fake adapter supports tests. Domain models
   persist only opaque storage keys and no API returns storage paths or URLs.
-- Local SQLite remains the default. PostgreSQL-specific concurrency validation requires a separately
-  approved local/test service before production claims. A free local PostgreSQL or Docker runtime,
-  or a later GitHub Actions service container, is sufficient for that verification track.
+- Local SQLite remains the default. PostgreSQL-specific concurrency validation uses the explicit
+  `config.postgresql_test_settings` module and the optional `docker-compose.postgres-test.yml`
+  service, or an equivalent local loopback PostgreSQL server. Passing PostgreSQL evidence remains
+  required before production claims.
 
 Redis and Celery are not planned for version one. Draft expiry, pending physical deletion, and stale
 orphan cleanup begin as one idempotent, batch-bounded Django management command with dry-run output.
@@ -72,7 +74,8 @@ staff download remain deferred.
 
 ## Docker Planning
 
-Docker and deployment configuration are deferred until Phase 6.
+Production Docker and deployment configuration are deferred until Phase 6. The only committed Docker
+configuration in Phase 3 is the test-only PostgreSQL verification service.
 
 Planned requirements:
 

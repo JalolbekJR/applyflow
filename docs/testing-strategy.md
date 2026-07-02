@@ -70,6 +70,10 @@ Run from `backend/` with the virtual environment installed:
 .\.venv\Scripts\ruff.exe format --check .
 ```
 
+The PostgreSQL verification boundary is separate from the ordinary SQLite suite. Use
+[PostgreSQL verification](postgresql-verification.md) for the test-only service, environment
+variables, focused command, relevant existing-test subset, proof command, and teardown.
+
 Current pytest coverage includes:
 
 - Vacancy UUID, status choices, slug uniqueness, published reads, and unpublished rejection.
@@ -94,18 +98,18 @@ Current pytest coverage includes:
 
 ### Models, Constraints, And Services
 
-| Area                        | Status                                                            | Required tests                                                                                                                                                                                                                  | Primary engine                                 |
-| --------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Credential hashing          | Implemented and currently tested                                  | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize.                                                                                                              | SQLite                                         |
-| Draft expiry                | Implemented and currently tested                                  | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention.                                                                          | SQLite                                         |
-| Ownership                   | Implemented and currently tested                                  | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required.                                                                                                | SQLite                                         |
-| State transitions           | Implemented and currently tested                                  | Only active drafts mutate; abandon/request-time expire revoke and scrub; submitted transition remains unavailable in Phase 3.                                                                                                   | SQLite                                         |
-| Optimistic version          | Implemented; PostgreSQL-specific verification pending             | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry.               | SQLite; concurrent lock behavior on PostgreSQL |
-| Experience entries          | Implemented; PostgreSQL-specific cap/order verification pending   | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, persisted order, cascade/scrub, and parent-version increment.                                                                     | SQLite; concurrent cap/order on PostgreSQL     |
-| Active document uniqueness  | Implemented; PostgreSQL-specific replacement verification pending | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically.                                                                                                                       | SQLite; concurrent replacement on PostgreSQL   |
-| Cleanup-supporting metadata | Implemented and currently tested                                  | Logical deletion, deletion timestamps, pending physical-deletion metadata, request-path delete attempts, replacement compensation, and adapter enumeration.                                                                     | SQLite plus temporary fake/local storage       |
-| Cleanup command coverage    | Implemented and currently tested                                  | Cleanup eligibility beyond request paths, stale-orphan grace-period behavior, batch selection, dry-run, repeated execution, retry across command runs, aggregate output, item-failure exit behavior, and conservative rechecks. | SQLite plus temporary fake/local storage       |
-| Scrubbing                   | Implemented and currently tested                                  | Candidate fields, skills, message, consent, experience text, and original display filename are removed by cleanup for expired/abandoned shells; current request paths revoke or logically retire data where reached.            | SQLite                                         |
+| Area                        | Status                                                        | Required tests                                                                                                                                                                                                                  | Primary engine                                       |
+| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Credential hashing          | Implemented and currently tested                              | Raw secret never stored; correct secret verifies; wrong secret fails; compound cookie UUID alone cannot authorize.                                                                                                              | SQLite                                               |
+| Draft expiry                | Implemented and currently tested                              | Seven-day inactivity expiry, thirty-day absolute lifetime, vacancy-deadline bound, successful mutation refresh, and reads that do not renew retention.                                                                          | SQLite                                               |
+| Ownership                   | Implemented and currently tested                              | Cookie UUID and route UUID must match; secret hash, active status, null revocation, expiry, and stored vacancy are all required.                                                                                                | SQLite                                               |
+| State transitions           | Implemented and currently tested                              | Only active drafts mutate; abandon/request-time expire revoke and scrub; submitted transition remains unavailable in Phase 3.                                                                                                   | SQLite                                               |
+| Optimistic version          | Implemented and covered by PostgreSQL-specific tests          | Authorized reads return `ETag`; accepted mutations increment once and return a fresh `ETag`; missing `If-Match` returns `428`; stale version is rejected; failed validation does not increment or refresh expiry.               | SQLite; concurrent lock behavior on PostgreSQL       |
+| Experience entries          | Implemented; constraints covered by PostgreSQL-specific tests | Parent ownership, month validation, current/end consistency, unique position, five-entry cap, persisted order, cascade/scrub, and parent-version increment.                                                                     | SQLite; concurrent constraint behavior on PostgreSQL |
+| Active document uniqueness  | Implemented and covered by PostgreSQL-specific tests          | One active document per draft; deleted history may coexist; replacement swaps active metadata atomically.                                                                                                                       | SQLite; concurrent replacement on PostgreSQL         |
+| Cleanup-supporting metadata | Implemented and currently tested                              | Logical deletion, deletion timestamps, pending physical-deletion metadata, request-path delete attempts, replacement compensation, and adapter enumeration.                                                                     | SQLite plus temporary fake/local storage             |
+| Cleanup command coverage    | Implemented and currently tested                              | Cleanup eligibility beyond request paths, stale-orphan grace-period behavior, batch selection, dry-run, repeated execution, retry across command runs, aggregate output, item-failure exit behavior, and conservative rechecks. | SQLite plus temporary fake/local storage             |
+| Scrubbing                   | Implemented and currently tested                              | Candidate fields, skills, message, consent, experience text, and original display filename are removed by cleanup for expired/abandoned shells; current request paths revoke or logically retire data where reached.            | SQLite                                               |
 
 ### API Authorization And CSRF
 
@@ -195,7 +199,7 @@ SQLite remains appropriate for serializer, service, API, cleanup-supporting meta
 storage-adapter, and most model tests. It can exercise the existing check and partial-unique
 behavior used by the local project.
 
-The following evidence must be repeated on PostgreSQL before production-readiness claims:
+The following evidence must pass on PostgreSQL before production-readiness claims:
 
 - `select_for_update` behavior for simultaneous save, abandon, upload, replace, and delete;
 - stale-version losers and no lost updates across transactions;
@@ -203,13 +207,15 @@ The following evidence must be repeated on PostgreSQL before production-readines
 - conditional one-active-document uniqueness under concurrent replacement;
 - generated check constraints and migration SQL;
 - transaction/on-commit compensation behavior with the production database driver;
-- cleanup batch locking if parallel cleanup is ever allowed. The current command has no parallel
-  mode.
+- cleanup rechecks and accidental overlapping operator runs. The current command has no parallel
+  feature.
 
-Phase 3 can be implemented with SQLite locally, but a skipped PostgreSQL check must remain an
-explicit release risk. Creating or connecting a PostgreSQL service requires separate approval.
-Suitable later verification environments include a free local PostgreSQL or Docker runtime, or a
-GitHub Actions service container.
+Phase 3 can be implemented with SQLite locally, but a skipped or blocked PostgreSQL check remains an
+explicit release risk. The repository includes a loopback-only test Compose service and explicit
+PostgreSQL settings module for this verification track. Suitable verification environments include
+a local Docker PostgreSQL service, an already-running local PostgreSQL instance that satisfies the
+settings guard, or a later CI service container. PostgreSQL evidence must be rerun after database,
+storage, cleanup, or mutation changes.
 
 ## Test Data Rules
 

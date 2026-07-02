@@ -84,5 +84,6 @@ security changes.
 
 ## Unavailable Or Unverified
 
-PostgreSQL runtime/concurrency validation, production deployment, CI, monitoring, backups,
-scheduled cleanup, final submission, and private status lookup remain future work.
+Production deployment, CI, monitoring, backups, scheduled cleanup, final submission, and private
+status lookup remain future work. PostgreSQL runtime/concurrency verification exists as a separate
+backend test boundary and must be rerun after relevant backend contract changes.

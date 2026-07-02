@@ -5,7 +5,8 @@ private CV metadata/upload APIs. Final submission and private status lookup rema
 adds the Django backend foundation, DRF configuration, database-backed domain models, migrations,
 Django Admin registration, health endpoint, read-only public vacancy API, and
 environment-driven PostgreSQL-ready settings. Local migrations and tests use SQLite; PostgreSQL
-runtime behavior has not been verified.
+runtime verification has a test-only harness and must be rerun against an actual PostgreSQL service
+after relevant backend changes.
 
 This remains an outline because final submission, private status lookup APIs, cleanup automation,
 deployment, monitoring, backup, and operational procedures are not implemented. A manual cleanup

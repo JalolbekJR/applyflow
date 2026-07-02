@@ -34,5 +34,7 @@ Django Admin will support internal vacancy and application management. Django RE
 ## Current Status
 
 The Django foundation, models, migrations, admin registration, health endpoint, and read-only
-vacancy API are implemented. SQLite was used locally. PostgreSQL settings parsing is tested, but an
-actual PostgreSQL connection was not validated.
+vacancy API are implemented. SQLite remains the default fast local database. PostgreSQL settings
+parsing and a test-only PostgreSQL runtime/concurrency verification boundary are implemented for
+Phase 3 evidence. Production PostgreSQL topology, credentials, pooling, failover, backups,
+monitoring, deployment, and load testing remain deferred.

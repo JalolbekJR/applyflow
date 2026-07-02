@@ -20,9 +20,11 @@ requirements need it. Django Admin remains the staff workflow.
 
 ## Why PostgreSQL?
 
-The backend is PostgreSQL-ready, but local validation still uses SQLite. Future submission work
-needs transaction coverage, indexes, and a database constraint for duplicate protection that must be
-validated on PostgreSQL before production use.
+The backend is PostgreSQL-ready, while SQLite remains the default fast local database. Phase 3 has a
+separate PostgreSQL verification boundary for selected row-locking, concurrent uniqueness, document
+lifecycle, cleanup-race, rollback, and compensation behavior. Future submission work still needs
+transaction coverage, indexes, and a database constraint for duplicate protection validated on
+PostgreSQL before production use.
 
 ## Why No Candidate Account?
 
